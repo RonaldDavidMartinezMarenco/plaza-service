@@ -1,0 +1,25 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: plaza-service
+  mvc:
+    problemdetails:
+      enabled: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/plaza_db}
+    username: ${SPRING_DATASOURCE_USERNAME:foodcourt}
+    password: ${SPRING_DATASOURCE_PASSWORD:foodcourt}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+foodcourt:
+  clients:
+    user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+    traceability-service-url: ${TRACEABILITY_SERVICE_URL:http://localhost:8083}
+    messaging-service-url: ${MESSAGING_SERVICE_URL:http://localhost:8084}
