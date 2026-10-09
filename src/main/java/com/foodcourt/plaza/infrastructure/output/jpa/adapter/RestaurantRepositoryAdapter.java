@@ -1,6 +1,7 @@
 package com.foodcourt.plaza.infrastructure.output.jpa.adapter;
 
 import java.sql.SQLException;
+import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,12 @@ public class RestaurantRepositoryAdapter implements RestaurantRepository {
     @Transactional(readOnly = true)
     public boolean existsByNit(String nit) {
         return restaurants.existsByNit(nit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Restaurant> findById(long id) {
+        return restaurants.findById(id).map(mapper::toDomain);
     }
 
     @Override
