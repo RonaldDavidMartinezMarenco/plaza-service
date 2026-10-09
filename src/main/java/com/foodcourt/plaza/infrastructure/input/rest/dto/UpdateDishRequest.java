@@ -18,7 +18,7 @@ import jakarta.validation.constraints.Size;
 @JsonIgnoreProperties(ignoreUnknown = false)
 public record UpdateDishRequest(
         @NotNull @Positive Integer price,
-        @NotBlank @Size(max = 500) @Pattern(regexp = ".*\\p{L}.*") String description) {
+        @NotBlank @Size(max = 500) @Pattern(regexp = "^(?=.*\\p{L})[\\p{L}\\p{N} .,;:!?¿¡'\"()\\-/&]+$") String description) {
 
     @JsonAnySetter
     void rejectUnknown(String name, Object ignored) {

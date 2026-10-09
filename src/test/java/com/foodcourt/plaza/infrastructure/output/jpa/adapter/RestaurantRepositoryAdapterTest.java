@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
+import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.infrastructure.output.jpa.entity.RestaurantEntity;
 import com.foodcourt.plaza.infrastructure.output.jpa.repository.RestaurantJpaRepository;
@@ -79,11 +80,28 @@ class RestaurantRepositoryAdapterTest {
     }
 
     @Test
+    void existsByNameIgnoresCase() {
+        when(restaurants.existsByNameIgnoreCase("La 14")).thenReturn(true);
+
+        assertThat(adapter.existsByName("La 14")).isTrue();
+        verify(restaurants).existsByNameIgnoreCase("La 14");
+    }
+
+    @Test
     void saveRejectsADuplicateNit() {
         when(restaurants.saveAndFlush(any(RestaurantEntity.class)))
                 .thenThrow(unique("duplicate key value violates unique constraint \"restaurant_nit_key\""));
 
         assertThatThrownBy(() -> adapter.save(draft())).isInstanceOf(NitAlreadyRegistered.class);
+    }
+
+    @Test
+    void saveRejectsADuplicateName() {
+        when(restaurants.saveAndFlush(any(RestaurantEntity.class)))
+                .thenThrow(unique(
+                        "duplicate key value violates unique constraint \"restaurant_name_ci_idx\""));
+
+        assertThatThrownBy(() -> adapter.save(draft())).isInstanceOf(RestaurantNameAlreadyRegistered.class);
     }
 
     @Test

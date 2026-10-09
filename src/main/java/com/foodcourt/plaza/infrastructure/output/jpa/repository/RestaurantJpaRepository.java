@@ -8,4 +8,6 @@ import com.foodcourt.plaza.infrastructure.output.jpa.entity.RestaurantEntity;
 public interface RestaurantJpaRepository extends JpaRepository<RestaurantEntity, Long> {
 
     boolean existsByNit(String nit);
+
+    boolean existsByNameIgnoreCase(String name);
 }

@@ -111,7 +111,8 @@ class DishControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Invalid dish text"))
-                .andExpect(jsonPath("$.detail").value("The dish text cannot be blank"))
+                .andExpect(jsonPath("$.detail").value(
+                        "The dish text must contain a letter and only the allowed characters"))
                 .andExpect(jsonPath("$.status").value(400));
     }
 
@@ -228,7 +229,8 @@ class DishControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Invalid dish text"))
-                .andExpect(jsonPath("$.detail").value("The dish text cannot be blank"))
+                .andExpect(jsonPath("$.detail").value(
+                        "The dish text must contain a letter and only the allowed characters"))
                 .andExpect(jsonPath("$.status").value(400));
     }
 
@@ -240,7 +242,8 @@ class DishControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Invalid dish description"))
-                .andExpect(jsonPath("$.detail").value("The description must include a word"))
+                .andExpect(jsonPath("$.detail").value(
+                        "The description must contain a letter and only the allowed characters"))
                 .andExpect(jsonPath("$.status").value(400));
     }
 
@@ -328,6 +331,8 @@ class DishControllerTest {
                 Arguments.of("spaces only description", updateBody("15000", "   ")),
                 Arguments.of("digits only description", updateBody("15000", "12345")),
                 Arguments.of("symbols only description", updateBody("15000", "!!!")),
+                Arguments.of("description with a newline", updateBody("15000", "Hola\\nMundo")),
+                Arguments.of("description with markup", updateBody("15000", "<b>Hi</b>")),
                 Arguments.of("description longer than 500", updateBody("15000", "a".repeat(501))),
                 Arguments.of("unknown name", updateBodyWith("\"name\": \"Pasta\"")),
                 Arguments.of("unknown image", updateBodyWith("\"imageUrl\": \"" + image() + "\"")),
@@ -348,6 +353,8 @@ class DishControllerTest {
                 Arguments.of("missing name", missingName()),
                 Arguments.of("blank name", body("", "12000", "Cream sauce", image(), "Main", "4")),
                 Arguments.of("spaces only name", body("   ", "12000", "Cream sauce", image(), "Main", "4")),
+                Arguments.of("digits only name", body("123", "12000", "Cream sauce", image(), "Main", "4")),
+                Arguments.of("name with a sign", body("Pasta!", "12000", "Cream sauce", image(), "Main", "4")),
                 Arguments.of("name longer than 100", body("a".repeat(101), "12000", "Cream sauce", image(), "Main", "4")),
                 Arguments.of("price zero", body("Pasta", "0", "Cream sauce", image(), "Main", "4")),
                 Arguments.of("negative price", body("Pasta", "-1", "Cream sauce", image(), "Main", "4")),
@@ -356,9 +363,11 @@ class DishControllerTest {
                 Arguments.of("blank description", body("Pasta", "12000", "", image(), "Main", "4")),
                 Arguments.of("digits only description", body("Pasta", "12000", "12345", image(), "Main", "4")),
                 Arguments.of("symbols only description", body("Pasta", "12000", "!!!", image(), "Main", "4")),
+                Arguments.of("description with markup", body("Pasta", "12000", "<b>Hi</b>", image(), "Main", "4")),
                 Arguments.of("description longer than 500", body("Pasta", "12000", "a".repeat(501), image(), "Main", "4")),
                 Arguments.of("image without http", body("Pasta", "12000", "Cream sauce", "cdn.example.com/pasta.png", "Main", "4")),
                 Arguments.of("blank category", body("Pasta", "12000", "Cream sauce", image(), "", "4")),
+                Arguments.of("digits only category", body("Pasta", "12000", "Cream sauce", image(), "123", "4")),
                 Arguments.of("category longer than 50", body("Pasta", "12000", "Cream sauce", image(), "a".repeat(51), "4")),
                 Arguments.of("null restaurant", body("Pasta", "12000", "Cream sauce", image(), "Main", "null")),
                 Arguments.of("restaurant id zero", body("Pasta", "12000", "Cream sauce", image(), "Main", "0")),

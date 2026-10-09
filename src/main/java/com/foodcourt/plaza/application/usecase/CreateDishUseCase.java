@@ -20,7 +20,7 @@ import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 
 /**
  * Creates a dish. Checks run in this order, and a rejection does not save:
- * a trimmed name and category; a trimmed description that includes a word;
+ * a name and category in the name shape; a description in the description shape;
  * a price greater than zero; an existing restaurant; then that restaurant's
  * owner account with role {@link Role#OWNER}. A new dish is always active.
  */
@@ -60,7 +60,7 @@ public final class CreateDishUseCase implements CreateDish {
     }
 
     private static DishText requireCategory(NewDish draft) {
-        return new DishText(draft.category());
+        return DishText.category(draft.category());
     }
 
     private static DishPrice requirePrice(NewDish draft) {

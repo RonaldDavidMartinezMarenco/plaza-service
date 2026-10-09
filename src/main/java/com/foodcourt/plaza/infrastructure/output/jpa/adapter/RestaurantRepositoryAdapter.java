@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
+import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 import com.foodcourt.plaza.infrastructure.output.jpa.entity.RestaurantEntity;
@@ -17,7 +18,8 @@ import com.foodcourt.plaza.infrastructure.output.jpa.repository.RestaurantJpaRep
 /**
  * JPA adapter for {@link RestaurantRepository}.
  * A concurrent insert can pass the exists check and still hit the unique index.
- * PostgreSQL reports that as SQLState {@code 23505}; the message cites {@code nit}.
+ * PostgreSQL reports that as SQLState {@code 23505}; the message cites {@code nit}
+ * or {@code restaurant_name_ci_idx}.
  * The class is not final: {@code @Transactional} needs a CGLIB subclass.
  */
 @Service
@@ -41,6 +43,12 @@ public class RestaurantRepositoryAdapter implements RestaurantRepository {
 
     @Override
     @Transactional(readOnly = true)
+    public boolean existsByName(String name) {
+        return restaurants.existsByNameIgnoreCase(name);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<Restaurant> findById(long id) {
         return restaurants.findById(id).map(mapper::toDomain);
     }
@@ -59,6 +67,9 @@ public class RestaurantRepositoryAdapter implements RestaurantRepository {
     private RuntimeException translated(DataIntegrityViolationException failure) {
         if (isUniqueNit(failure)) {
             return new NitAlreadyRegistered();
+        }
+        if (isUniqueName(failure)) {
+            return new RestaurantNameAlreadyRegistered();
         }
         return failure;
     }
@@ -79,7 +90,15 @@ public class RestaurantRepositoryAdapter implements RestaurantRepository {
         return failure.getMostSpecificCause().getMessage();
     }
 
+    private static boolean isUniqueName(DataIntegrityViolationException failure) {
+        return isUniqueViolation(failure) && mentionsName(causeMessage(failure));
+    }
+
     private static boolean mentionsNit(String message) {
         return message != null && message.contains("nit");
+    }
+
+    private static boolean mentionsName(String message) {
+        return message != null && message.contains("restaurant_name_ci_idx");
     }
 }

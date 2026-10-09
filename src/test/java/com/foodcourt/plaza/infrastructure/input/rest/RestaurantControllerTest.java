@@ -28,8 +28,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.foodcourt.plaza.application.handler.CreateRestaurantHandler;
+import com.foodcourt.plaza.domain.exception.InvalidRestaurantAddress;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
+import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
@@ -90,14 +92,15 @@ class RestaurantControllerTest {
     }
 
     @Test
-    void createRejectsANumericNameThatBeanValidationAccepts() throws Exception {
+    void createRejectsAnInvalidRestaurantName() throws Exception {
         when(handler.create(any(NewRestaurant.class))).thenThrow(new InvalidRestaurantName());
 
-        postRestaurant(validBody("  123  ", "900123456", "Calle 10", "+573005698325", logo(), "15"))
+        postRestaurant(validBody("Sushi 24", "900123456", "Calle 10", "+573005698325", logo(), "15"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Invalid restaurant name"))
-                .andExpect(jsonPath("$.detail").value("The restaurant name cannot be blank or digits only"))
+                .andExpect(jsonPath("$.detail").value(
+                        "The restaurant name must contain a letter and only the allowed characters"))
                 .andExpect(jsonPath("$.status").value(400));
     }
 
@@ -138,6 +141,31 @@ class RestaurantControllerTest {
     }
 
     @Test
+    void createRejectsADuplicateName() throws Exception {
+        when(handler.create(any(NewRestaurant.class))).thenThrow(new RestaurantNameAlreadyRegistered());
+
+        postRestaurant(validBody("Sushi 24", "900123456", "Calle 10", "+573005698325", logo(), "15"))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Restaurant name already registered"))
+                .andExpect(jsonPath("$.detail").value("Restaurant name is already registered"))
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    void createRejectsAnInvalidAddress() throws Exception {
+        when(handler.create(any(NewRestaurant.class))).thenThrow(new InvalidRestaurantAddress());
+
+        postRestaurant(validBody("Sushi 24", "900123456", "Calle 10", "+573005698325", logo(), "15"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid restaurant address"))
+                .andExpect(jsonPath("$.detail").value(
+                        "The address must contain a letter and only the allowed characters"))
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
     void createReportsAnUnavailableUserService() throws Exception {
         when(handler.create(any(NewRestaurant.class))).thenThrow(new OwnerDirectoryUnavailable());
 
@@ -152,6 +180,9 @@ class RestaurantControllerTest {
     private static Stream<Arguments> rejectedBodies() {
         return Stream.of(
                 Arguments.of("name with only digits", body("123", "900123456", "Calle 10", "+573005698325", logo(), "15")),
+                Arguments.of("name with only symbols", body("***", "900123456", "Calle 10", "+573005698325", logo(), "15")),
+                Arguments.of("name with a sign", body("Sushi!", "900123456", "Calle 10", "+573005698325", logo(), "15")),
+                Arguments.of("address with only symbols", body("Sushi 24", "900123456", "***", "+573005698325", logo(), "15")),
                 Arguments.of("nit with letters", body("Sushi 24", "90012A", "Calle 10", "+573005698325", logo(), "15")),
                 Arguments.of("phone longer than 13", body("Sushi 24", "900123456", "Calle 10", "+5730056983259", logo(), "15")),
                 Arguments.of("phone with letters", body("Sushi 24", "900123456", "Calle 10", "57abc", logo(), "15")),
