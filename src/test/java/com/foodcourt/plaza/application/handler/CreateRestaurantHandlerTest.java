@@ -1,0 +1,47 @@
+package com.foodcourt.plaza.application.handler;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.foodcourt.plaza.domain.api.CreateRestaurant;
+import com.foodcourt.plaza.domain.model.NewRestaurant;
+import com.foodcourt.plaza.domain.model.Restaurant;
+
+@ExtendWith(MockitoExtension.class)
+class CreateRestaurantHandlerTest {
+
+    @Mock
+    private CreateRestaurant createRestaurant;
+
+    @Test
+    void createForwardsTheRestaurantAndReturnsTheStoredOne() {
+        NewRestaurant incoming = new NewRestaurant(
+                "Sushi 24",
+                "900123456",
+                "Calle 10",
+                "+573005698325",
+                "https://cdn.example.com/logos/sushi.png",
+                15L);
+        Restaurant stored = new Restaurant(
+                8L,
+                "Sushi 24",
+                "900123456",
+                "Calle 10",
+                "+573005698325",
+                "https://cdn.example.com/logos/sushi.png",
+                15L);
+        when(createRestaurant.create(incoming)).thenReturn(stored);
+        CreateRestaurantHandler handler = new CreateRestaurantHandler(createRestaurant);
+
+        Restaurant result = handler.create(incoming);
+
+        assertThat(result).isEqualTo(stored);
+        verify(createRestaurant).create(incoming);
+    }
+}
