@@ -7,11 +7,14 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
+import com.foodcourt.plaza.domain.exception.InvalidDishText;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
+import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -25,6 +28,21 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidRestaurantName.class)
     ProblemDetail invalidName(InvalidRestaurantName exception, HttpServletRequest request) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid restaurant name", exception, request);
+    }
+
+    @ExceptionHandler(InvalidDishText.class)
+    ProblemDetail invalidDishText(InvalidDishText exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid dish text", exception, request);
+    }
+
+    @ExceptionHandler(InvalidDishPrice.class)
+    ProblemDetail invalidDishPrice(InvalidDishPrice exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid dish price", exception, request);
+    }
+
+    @ExceptionHandler(RestaurantNotFound.class)
+    ProblemDetail missingRestaurant(RestaurantNotFound exception, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Restaurant not found", exception, request);
     }
 
     @ExceptionHandler(OwnerRoleRequired.class)

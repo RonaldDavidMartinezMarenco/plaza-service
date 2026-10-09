@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.sql.SQLException;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,6 +65,20 @@ class RestaurantRepositoryAdapterTest {
     }
 
     @Test
+    void findByIdReturnsTheRestaurant() {
+        when(restaurants.findById(8L)).thenReturn(Optional.of(row(8L)));
+
+        assertThat(adapter.findById(8L)).contains(draftWithId(8L));
+    }
+
+    @Test
+    void findByIdReturnsEmptyWhenTheRowIsMissing() {
+        when(restaurants.findById(8L)).thenReturn(Optional.empty());
+
+        assertThat(adapter.findById(8L)).isEmpty();
+    }
+
+    @Test
     void saveRejectsADuplicateNit() {
         when(restaurants.saveAndFlush(any(RestaurantEntity.class)))
                 .thenThrow(unique("duplicate key value violates unique constraint \"restaurant_nit_key\""));
@@ -96,8 +111,23 @@ class RestaurantRepositoryAdapterTest {
     }
 
     private static Restaurant draft() {
+        return draftWithId(null);
+    }
+
+    private static Restaurant draftWithId(Long id) {
         return new Restaurant(
-                null,
+                id,
+                "Sushi 24",
+                "900123456",
+                "Calle 10",
+                "+573005698325",
+                "https://cdn.example.com/logos/sushi.png",
+                15L);
+    }
+
+    private static RestaurantEntity row(long id) {
+        return new RestaurantEntity(
+                id,
                 "Sushi 24",
                 "900123456",
                 "Calle 10",
