@@ -7,6 +7,8 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.foodcourt.plaza.domain.exception.DishNotFound;
+import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
 import com.foodcourt.plaza.domain.exception.InvalidDishText;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
@@ -17,6 +19,7 @@ import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 
 /**
  * Maps domain failures to {@code application/problem+json}.
@@ -24,6 +27,11 @@ import jakarta.servlet.http.HttpServletRequest;
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    ProblemDetail invalidConstraint(ConstraintViolationException exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid request", exception, request);
+    }
 
     @ExceptionHandler(InvalidRestaurantName.class)
     ProblemDetail invalidName(InvalidRestaurantName exception, HttpServletRequest request) {
@@ -35,9 +43,19 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, "Invalid dish text", exception, request);
     }
 
+    @ExceptionHandler(InvalidDishDescription.class)
+    ProblemDetail invalidDishDescription(InvalidDishDescription exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid dish description", exception, request);
+    }
+
     @ExceptionHandler(InvalidDishPrice.class)
     ProblemDetail invalidDishPrice(InvalidDishPrice exception, HttpServletRequest request) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid dish price", exception, request);
+    }
+
+    @ExceptionHandler(DishNotFound.class)
+    ProblemDetail missingDish(DishNotFound exception, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Dish not found", exception, request);
     }
 
     @ExceptionHandler(RestaurantNotFound.class)

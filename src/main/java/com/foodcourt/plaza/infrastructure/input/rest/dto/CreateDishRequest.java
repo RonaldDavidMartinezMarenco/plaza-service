@@ -13,7 +13,7 @@ import jakarta.validation.constraints.Size;
 public record CreateDishRequest(
         @NotBlank @Size(max = 100) String name,
         @NotNull @Positive Integer price,
-        @NotBlank @Size(max = 500) String description,
+        @NotBlank @Size(max = 500) @Pattern(regexp = ".*\\p{L}.*") String description,
         @NotBlank @Size(max = 2048) @Pattern(regexp = "^https?://\\S+$") String imageUrl,
         @NotBlank @Size(max = 50) String category,
         @NotNull @Positive Long restaurantId) {

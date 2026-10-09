@@ -8,6 +8,7 @@ import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Account;
 import com.foodcourt.plaza.domain.model.Dish;
+import com.foodcourt.plaza.domain.model.DishDescription;
 import com.foodcourt.plaza.domain.model.DishPrice;
 import com.foodcourt.plaza.domain.model.DishText;
 import com.foodcourt.plaza.domain.model.NewDish;
@@ -19,9 +20,9 @@ import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 
 /**
  * Creates a dish. Checks run in this order, and a rejection does not save:
- * trimmed name, description, and category; a price greater than zero; an existing
- * restaurant; then that restaurant's owner account with role {@link Role#OWNER}.
- * A new dish is always active.
+ * a trimmed name and category; a trimmed description that includes a word;
+ * a price greater than zero; an existing restaurant; then that restaurant's
+ * owner account with role {@link Role#OWNER}. A new dish is always active.
  */
 @Service
 public final class CreateDishUseCase implements CreateDish {
@@ -42,7 +43,7 @@ public final class CreateDishUseCase implements CreateDish {
     @Override
     public Dish create(NewDish draft) {
         DishText name = requireName(draft);
-        DishText description = requireDescription(draft);
+        DishDescription description = requireDescription(draft);
         DishText category = requireCategory(draft);
         DishPrice price = requirePrice(draft);
         Restaurant restaurant = requireRestaurant(draft.restaurantId());
@@ -54,8 +55,8 @@ public final class CreateDishUseCase implements CreateDish {
         return new DishText(draft.name());
     }
 
-    private static DishText requireDescription(NewDish draft) {
-        return new DishText(draft.description());
+    private static DishDescription requireDescription(NewDish draft) {
+        return new DishDescription(draft.description());
     }
 
     private static DishText requireCategory(NewDish draft) {
@@ -81,7 +82,7 @@ public final class CreateDishUseCase implements CreateDish {
             NewDish draft,
             DishText name,
             DishPrice price,
-            DishText description,
+            DishDescription description,
             DishText category,
             Restaurant restaurant) {
         return new Dish(

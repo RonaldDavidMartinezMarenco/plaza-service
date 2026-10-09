@@ -1,5 +1,7 @@
 package com.foodcourt.plaza.infrastructure.output.jpa.adapter;
 
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,12 @@ public class DishRepositoryAdapter implements DishRepository {
 
     public DishRepositoryAdapter(DishJpaRepository dishes) {
         this.dishes = dishes;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Dish> findById(long id) {
+        return dishes.findById(id).map(mapper::toDomain);
     }
 
     @Override

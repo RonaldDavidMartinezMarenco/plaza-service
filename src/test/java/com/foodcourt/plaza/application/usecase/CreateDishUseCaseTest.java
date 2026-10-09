@@ -21,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
 import com.foodcourt.plaza.domain.exception.InvalidDishText;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
@@ -100,6 +101,16 @@ class CreateDishUseCaseTest {
         verify(dishes, never()).save(any());
     }
 
+    @ParameterizedTest
+    @MethodSource("wordlessDescriptions")
+    void createRejectsADescriptionWithoutAWordBeforeLoadingTheRestaurant(String description) {
+        assertThatThrownBy(() -> useCase.create(draft("Pasta", 12000, description, "Main")))
+                .isInstanceOf(InvalidDishDescription.class);
+        verify(restaurants, never()).findById(anyLong());
+        verify(owners, never()).findById(anyLong());
+        verify(dishes, never()).save(any());
+    }
+
     @Test
     void createRejectsAnUnknownRestaurant() {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.empty());
@@ -133,6 +144,10 @@ class CreateDishUseCaseTest {
 
     private static Stream<Integer> invalidPrices() {
         return Stream.of(null, 0, -1);
+    }
+
+    private static Stream<String> wordlessDescriptions() {
+        return Stream.of("123", "!!!", "123---", "   999   ");
     }
 
     private static Stream<NewDish> blankTexts() {
