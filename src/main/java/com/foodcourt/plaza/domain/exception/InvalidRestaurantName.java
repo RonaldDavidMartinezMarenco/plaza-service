@@ -1,9 +1,9 @@
 package com.foodcourt.plaza.domain.exception;
 
-/** The name is blank or only digits after trimming. Mapped to HTTP 400. */
+/** The name fails the stored shape. Mapped to HTTP 400. */
 public final class InvalidRestaurantName extends RuntimeException {
 
     public InvalidRestaurantName() {
-        super("The restaurant name cannot be blank or digits only");
+        super("The restaurant name must contain a letter and only the allowed characters");
     }
 }

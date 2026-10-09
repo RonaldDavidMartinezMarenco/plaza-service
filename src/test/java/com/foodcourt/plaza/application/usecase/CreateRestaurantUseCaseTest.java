@@ -20,8 +20,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.foodcourt.plaza.domain.exception.InvalidRestaurantAddress;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
+import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.model.Account;
@@ -69,6 +71,19 @@ class CreateRestaurantUseCaseTest {
         assertThat(stored.getValue().ownerId()).isEqualTo(OWNER_ID);
         assertThat(created.id()).isEqualTo(8L);
         assertThat(created.name()).isEqualTo("Sushi 24");
+        verify(restaurants).existsByName("Sushi 24");
+    }
+
+    @Test
+    void createCollapsesSpacesInTheNameAndAddress() {
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
+        when(restaurants.save(any(Restaurant.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Restaurant created = useCase.create(draft("  La   14  ", "900123456", "  Calle   10  "));
+
+        assertThat(created.name()).isEqualTo("La 14");
+        assertThat(created.address()).isEqualTo("Calle 10");
+        verify(restaurants).existsByName("La 14");
     }
 
     @Test
@@ -100,11 +115,20 @@ class CreateRestaurantUseCaseTest {
     }
 
     @Test
+    void createRejectsAnAddressOutsideTheShape() {
+        assertThatThrownBy(() -> useCase.create(draft("Sushi 24", "900123456", "***")))
+                .isInstanceOf(InvalidRestaurantAddress.class);
+        verify(owners, never()).findById(anyLong());
+        verify(restaurants, never()).save(any());
+    }
+
+    @Test
     void createRejectsAnUnknownOwner() {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.create(draft("Sushi 24", "900123456")))
                 .isInstanceOf(OwnerNotFound.class);
+        verify(restaurants, never()).existsByName(any());
         verify(restaurants, never()).existsByNit(any());
         verify(restaurants, never()).save(any());
     }
@@ -116,6 +140,18 @@ class CreateRestaurantUseCaseTest {
 
         assertThatThrownBy(() -> useCase.create(draft("Sushi 24", "900123456")))
                 .isInstanceOf(OwnerRoleRequired.class);
+        verify(restaurants, never()).existsByName(any());
+        verify(restaurants, never()).existsByNit(any());
+        verify(restaurants, never()).save(any());
+    }
+
+    @Test
+    void createRejectsADuplicateName() {
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
+        when(restaurants.existsByName("la 14")).thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.create(draft("  la   14  ", "900123456")))
+                .isInstanceOf(RestaurantNameAlreadyRegistered.class);
         verify(restaurants, never()).existsByNit(any());
         verify(restaurants, never()).save(any());
     }
@@ -135,7 +171,11 @@ class CreateRestaurantUseCaseTest {
     }
 
     private static NewRestaurant draft(String name, String nit) {
-        return new NewRestaurant(name, nit, "Calle 10", "+573005698325", LOGO, OWNER_ID);
+        return draft(name, nit, "Calle 10");
+    }
+
+    private static NewRestaurant draft(String name, String nit, String address) {
+        return new NewRestaurant(name, nit, address, "+573005698325", LOGO, OWNER_ID);
     }
 
     private static Restaurant withId(Restaurant restaurant, long id) {

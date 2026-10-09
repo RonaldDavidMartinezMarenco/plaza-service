@@ -1,37 +1,28 @@
 package com.foodcourt.plaza.domain.model;
 
-import java.util.regex.Pattern;
-
 import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishText;
 
 /**
- * Dish description stored without surrounding spaces.
- * Empty text is rejected. A value made only of digits or symbols is rejected;
- * it must include at least one letter.
+ * Dish description stored without surrounding spaces and with single spaces inside.
+ * Empty text is rejected. A value needs one letter, between 2 and 500 characters,
+ * and may include sentence punctuation. A newline is rejected.
  */
 public record DishDescription(String value) {
 
-    private static final Pattern WORD = Pattern.compile("\\p{L}");
+    static final int MAX = 500;
 
     public DishDescription {
-        String trimmed = trimmed(value);
-        if (trimmed.isEmpty()) {
+        String normalized = TextShape.collapse(value);
+        if (normalized.isEmpty()) {
             throw new InvalidDishText();
         }
-        requireWord(trimmed);
-        value = trimmed;
+        requireShape(normalized);
+        value = normalized;
     }
 
-    private static String trimmed(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.trim();
-    }
-
-    private static void requireWord(String trimmed) {
-        if (!WORD.matcher(trimmed).find()) {
+    private static void requireShape(String normalized) {
+        if (!TextShape.matches(normalized, MAX, TextShape.DESCRIPTION)) {
             throw new InvalidDishDescription();
         }
     }

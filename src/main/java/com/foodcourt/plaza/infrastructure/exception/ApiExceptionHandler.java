@@ -11,8 +11,10 @@ import com.foodcourt.plaza.domain.exception.DishNotFound;
 import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
 import com.foodcourt.plaza.domain.exception.InvalidDishText;
+import com.foodcourt.plaza.domain.exception.InvalidRestaurantAddress;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
+import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
@@ -36,6 +38,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidRestaurantName.class)
     ProblemDetail invalidName(InvalidRestaurantName exception, HttpServletRequest request) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid restaurant name", exception, request);
+    }
+
+    @ExceptionHandler(InvalidRestaurantAddress.class)
+    ProblemDetail invalidAddress(InvalidRestaurantAddress exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid restaurant address", exception, request);
     }
 
     @ExceptionHandler(InvalidDishText.class)
@@ -76,6 +83,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(NitAlreadyRegistered.class)
     ProblemDetail nitTaken(NitAlreadyRegistered exception, HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "NIT already registered", exception, request);
+    }
+
+    @ExceptionHandler(RestaurantNameAlreadyRegistered.class)
+    ProblemDetail nameTaken(RestaurantNameAlreadyRegistered exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Restaurant name already registered", exception, request);
     }
 
     @ExceptionHandler(OwnerDirectoryUnavailable.class)

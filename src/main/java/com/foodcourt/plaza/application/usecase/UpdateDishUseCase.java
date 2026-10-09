@@ -20,8 +20,8 @@ import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 
 /**
  * Updates a dish's price and description. Checks run in this order, and a
- * rejection does not save: a price greater than zero; a trimmed description
- * that includes a word; an existing dish; that dish's restaurant; that
+ * rejection does not save: a price greater than zero; a description in the
+ * description shape; an existing dish; that dish's restaurant; that
  * restaurant's owner account with role {@link Role#OWNER}. When the price and
  * description already match the stored dish, that dish is returned and nothing
  * is saved. Name, image, category, restaurant, and active stay as stored.

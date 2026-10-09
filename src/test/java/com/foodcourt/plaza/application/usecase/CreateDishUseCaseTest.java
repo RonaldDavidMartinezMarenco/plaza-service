@@ -65,17 +65,17 @@ class CreateDishUseCaseTest {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
         when(dishes.save(any(Dish.class))).thenAnswer(invocation -> withId(invocation.getArgument(0), 21L));
 
-        Dish created = useCase.create(draft("  Pasta  ", 12000, "  Cream sauce  ", "  Main  "));
+        Dish created = useCase.create(draft("  Pasta   Alfredo  ", 12000, "  Cream   sauce  ", "  Main   course  "));
 
         ArgumentCaptor<Dish> stored = ArgumentCaptor.forClass(Dish.class);
         verify(dishes).save(stored.capture());
         assertThat(stored.getValue().id()).isNull();
         assertThat(stored.getValue().restaurantId()).isEqualTo(RESTAURANT_ID);
-        assertThat(stored.getValue().name()).isEqualTo("Pasta");
+        assertThat(stored.getValue().name()).isEqualTo("Pasta Alfredo");
         assertThat(stored.getValue().price()).isEqualTo(12000);
         assertThat(stored.getValue().description()).isEqualTo("Cream sauce");
         assertThat(stored.getValue().imageUrl()).isEqualTo(IMAGE);
-        assertThat(stored.getValue().category()).isEqualTo("Main");
+        assertThat(stored.getValue().category()).isEqualTo("Main course");
         assertThat(stored.getValue().active()).isTrue();
         assertThat(created.id()).isEqualTo(21L);
         assertThat(created.active()).isTrue();
@@ -89,6 +89,14 @@ class CreateDishUseCaseTest {
                 .isInstanceOf(InvalidDishPrice.class);
         verify(restaurants, never()).findById(anyLong());
         verify(owners, never()).findById(anyLong());
+        verify(dishes, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidLabels")
+    void createRejectsALabelOutsideTheShape(NewDish draft) {
+        assertThatThrownBy(() -> useCase.create(draft)).isInstanceOf(InvalidDishText.class);
+        verify(restaurants, never()).findById(anyLong());
         verify(dishes, never()).save(any());
     }
 
@@ -147,7 +155,14 @@ class CreateDishUseCaseTest {
     }
 
     private static Stream<String> wordlessDescriptions() {
-        return Stream.of("123", "!!!", "123---", "   999   ");
+        return Stream.of("123", "!!!", "123---", "   999   ", "a", "Hola\nMundo");
+    }
+
+    private static Stream<NewDish> invalidLabels() {
+        return Stream.of(
+                draft("Pasta!", 12000, "Cream sauce", "Main"),
+                draft("A", 12000, "Cream sauce", "Main"),
+                draft("Pasta", 12000, "Cream sauce", "***"));
     }
 
     private static Stream<NewDish> blankTexts() {

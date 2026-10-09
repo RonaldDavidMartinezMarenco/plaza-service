@@ -1,23 +1,21 @@
 package com.foodcourt.plaza.domain.model;
 
-import java.util.regex.Pattern;
-
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 
 /**
- * Restaurant name stored without surrounding spaces.
- * Digits are allowed. A name that is empty or only digits after trimming is rejected.
- * The column check {@code name !~ '^[0-9]+$'} does not see those spaces.
+ * Restaurant name stored without surrounding spaces and with single spaces inside.
+ * At least two characters, at most 100, one letter, and only letters, digits,
+ * spaces, and {@code - ' . , &}. {@code Café} and {@code Cafe} stay distinct.
  */
 public record RestaurantName(String value) {
 
-    private static final Pattern DIGITS_ONLY = Pattern.compile("^[0-9]+$");
+    static final int MAX = 100;
 
     public RestaurantName {
-        String trimmed = value == null ? "" : value.trim();
-        if (trimmed.isEmpty() || DIGITS_ONLY.matcher(trimmed).matches()) {
+        String normalized = TextShape.collapse(value);
+        if (!TextShape.matches(normalized, MAX, TextShape.NAME)) {
             throw new InvalidRestaurantName();
         }
-        value = trimmed;
+        value = normalized;
     }
 }

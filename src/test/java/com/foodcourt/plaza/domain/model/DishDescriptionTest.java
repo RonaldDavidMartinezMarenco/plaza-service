@@ -12,10 +12,15 @@ import com.foodcourt.plaza.domain.exception.InvalidDishText;
 
 class DishDescriptionTest {
 
+    @Test
+    void collapsesInternalSpaces() {
+        assertThat(new DishDescription("  Ñoquis   al pesto!  ").value()).isEqualTo("Ñoquis al pesto!");
+    }
+
     @ParameterizedTest
-    @ValueSource(strings = {"Sopa", "  Ñoquis al pesto  ", "12 sopa", "a"})
+    @ValueSource(strings = {"Sopa", "12 sopa", "Hi!"})
     void keepsADescriptionThatIncludesAWord(String description) {
-        assertThat(new DishDescription(description).value()).isEqualTo(description.trim());
+        assertThat(new DishDescription(description).value()).isEqualTo(description);
     }
 
     @ParameterizedTest
@@ -30,8 +35,8 @@ class DishDescriptionTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"123", "!!!", "123---", "   999   "})
-    void rejectsDigitsOrSymbolsAlone(String description) {
+    @ValueSource(strings = {"123", "!!!", "123---", "   999   ", "a", "Hola\nMundo", "<b>Hi</b>"})
+    void rejectsADescriptionOutsideTheShape(String description) {
         assertThatThrownBy(() -> new DishDescription(description)).isInstanceOf(InvalidDishDescription.class);
     }
 }
