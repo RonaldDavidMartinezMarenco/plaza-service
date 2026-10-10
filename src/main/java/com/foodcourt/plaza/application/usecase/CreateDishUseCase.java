@@ -3,10 +3,12 @@ package com.foodcourt.plaza.application.usecase;
 import org.springframework.stereotype.Service;
 
 import com.foodcourt.plaza.domain.api.CreateDish;
+import com.foodcourt.plaza.domain.exception.AccessDenied;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Account;
+import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Dish;
 import com.foodcourt.plaza.domain.model.DishDescription;
 import com.foodcourt.plaza.domain.model.DishPrice;
@@ -21,8 +23,8 @@ import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 /**
  * Creates a dish. Checks run in this order, and a rejection does not save:
  * a name and category in the name shape; a description in the description shape;
- * a price greater than zero; an existing restaurant; then that restaurant's
- * owner account with role {@link Role#OWNER}. A new dish is always active.
+ * a price greater than zero; an existing restaurant; the caller is an {@link Role#OWNER}
+ * of that restaurant; then that restaurant's owner account. A new dish is always active.
  */
 @Service
 public final class CreateDishUseCase implements CreateDish {
@@ -41,12 +43,14 @@ public final class CreateDishUseCase implements CreateDish {
     }
 
     @Override
-    public Dish create(NewDish draft) {
+    public Dish create(Caller caller, NewDish draft) {
         DishText name = requireName(draft);
         DishDescription description = requireDescription(draft);
         DishText category = requireCategory(draft);
         DishPrice price = requirePrice(draft);
         Restaurant restaurant = requireRestaurant(draft.restaurantId());
+        requireOwnerCaller(caller);
+        requireOwnsRestaurant(caller, restaurant);
         requireOwner(restaurant.ownerId());
         return dishes.save(stored(draft, name, price, description, category, restaurant));
     }
@@ -69,6 +73,22 @@ public final class CreateDishUseCase implements CreateDish {
 
     private Restaurant requireRestaurant(Long restaurantId) {
         return restaurants.findById(restaurantId).orElseThrow(RestaurantNotFound::new);
+    }
+
+    private static void requireOwnerCaller(Caller caller) {
+        if (caller.role() != Role.OWNER) {
+            throw new AccessDenied();
+        }
+    }
+
+    private static void requireOwnsRestaurant(Caller caller, Restaurant restaurant) {
+        if (!owns(caller, restaurant)) {
+            throw new AccessDenied();
+        }
+    }
+
+    private static boolean owns(Caller caller, Restaurant restaurant) {
+        return caller.id() == restaurant.ownerId();
     }
 
     private void requireOwner(Long ownerId) {

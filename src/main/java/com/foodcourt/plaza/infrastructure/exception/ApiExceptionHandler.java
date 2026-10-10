@@ -7,6 +7,9 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.foodcourt.plaza.domain.exception.AccessDenied;
+import com.foodcourt.plaza.domain.exception.AccountLookupRejected;
+import com.foodcourt.plaza.domain.exception.AuthenticationRequired;
 import com.foodcourt.plaza.domain.exception.DishNotFound;
 import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
@@ -29,6 +32,21 @@ import jakarta.validation.ConstraintViolationException;
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(AuthenticationRequired.class)
+    ProblemDetail authenticationRequired(AuthenticationRequired exception, HttpServletRequest request) {
+        return problem(HttpStatus.UNAUTHORIZED, "Unauthorized", exception, request);
+    }
+
+    @ExceptionHandler(AccessDenied.class)
+    ProblemDetail accessDenied(AccessDenied exception, HttpServletRequest request) {
+        return problem(HttpStatus.FORBIDDEN, "Forbidden", exception, request);
+    }
+
+    @ExceptionHandler(AccountLookupRejected.class)
+    ProblemDetail accountLookupRejected(AccountLookupRejected exception, HttpServletRequest request) {
+        return problem(HttpStatus.FORBIDDEN, "Account lookup rejected", exception, request);
+    }
 
     @ExceptionHandler(ConstraintViolationException.class)
     ProblemDetail invalidConstraint(ConstraintViolationException exception, HttpServletRequest request) {

@@ -10,14 +10,22 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.foodcourt.plaza.domain.api.CreateRestaurant;
+import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.NewRestaurant;
 import com.foodcourt.plaza.domain.model.Restaurant;
+import com.foodcourt.plaza.domain.model.Role;
+import com.foodcourt.plaza.domain.spi.CurrentCaller;
 
 @ExtendWith(MockitoExtension.class)
 class CreateRestaurantHandlerTest {
 
+    private static final Caller ADMINISTRATOR = new Caller(1L, Role.ADMINISTRATOR);
+
     @Mock
     private CreateRestaurant createRestaurant;
+
+    @Mock
+    private CurrentCaller currentCaller;
 
     @Test
     void createForwardsTheRestaurantAndReturnsTheStoredOne() {
@@ -36,12 +44,13 @@ class CreateRestaurantHandlerTest {
                 "+573005698325",
                 "https://cdn.example.com/logos/sushi.png",
                 15L);
-        when(createRestaurant.create(incoming)).thenReturn(stored);
-        CreateRestaurantHandler handler = new CreateRestaurantHandler(createRestaurant);
+        when(currentCaller.require()).thenReturn(ADMINISTRATOR);
+        when(createRestaurant.create(ADMINISTRATOR, incoming)).thenReturn(stored);
+        CreateRestaurantHandler handler = new CreateRestaurantHandler(createRestaurant, currentCaller);
 
         Restaurant result = handler.create(incoming);
 
         assertThat(result).isEqualTo(stored);
-        verify(createRestaurant).create(incoming);
+        verify(createRestaurant).create(ADMINISTRATOR, incoming);
     }
 }

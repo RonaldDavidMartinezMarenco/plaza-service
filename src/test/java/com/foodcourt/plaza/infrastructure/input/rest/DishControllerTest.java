@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -26,6 +27,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -45,9 +48,10 @@ import com.foodcourt.plaza.domain.model.DishUpdate;
 import com.foodcourt.plaza.domain.model.NewDish;
 import com.foodcourt.plaza.infrastructure.exception.ApiExceptionHandler;
 import com.foodcourt.plaza.infrastructure.security.SecurityConfig;
+import com.foodcourt.plaza.infrastructure.security.SecurityProblemHandlers;
 
 @WebMvcTest(DishController.class)
-@Import({ApiExceptionHandler.class, SecurityConfig.class})
+@Import({ApiExceptionHandler.class, SecurityConfig.class, SecurityProblemHandlers.class})
 class DishControllerTest {
 
     @Autowired
@@ -58,6 +62,9 @@ class DishControllerTest {
 
     @MockitoBean
     private UpdateDishHandler updateDish;
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     @BeforeEach
     void setUp() {
@@ -215,6 +222,7 @@ class DishControllerTest {
     @MethodSource("rejectedIds")
     void updateRejectsAnInvalidId(String caseName, String id) throws Exception {
         mockMvc.perform(put("/dishes/" + id)
+                        .with(owner())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody("15000", "Tomato sauce")))
                 .andExpect(status().isBadRequest());
@@ -374,16 +382,43 @@ class DishControllerTest {
                 Arguments.of("negative restaurant id", body("Pasta", "12000", "Cream sauce", image(), "Main", "-1")));
     }
 
+    @Test
+    void createRejectsAMissingToken() throws Exception {
+        mockMvc.perform(post("/dishes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody("Pasta", "12000", "Cream sauce", image(), "Main", "4")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Authentication is required"));
+        verify(handler, never()).create(any());
+    }
+
+    @Test
+    void createRejectsACallerThatIsNotAnOwner() throws Exception {
+        mockMvc.perform(post("/dishes")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMINISTRATOR")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody("Pasta", "12000", "Cream sauce", image(), "Main", "4")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You do not have permission for this action"));
+        verify(handler, never()).create(any());
+    }
+
     private ResultActions postDish(String body) throws Exception {
         return mockMvc.perform(post("/dishes")
+                .with(owner())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }
 
     private ResultActions putDish(long id, String body) throws Exception {
         return mockMvc.perform(put("/dishes/" + id)
+                .with(owner())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
+    }
+
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor owner() {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_OWNER"));
     }
 
     private static String validBody(
