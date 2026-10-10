@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import com.foodcourt.plaza.domain.exception.AccountLookupRejected;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.model.Account;
 import com.foodcourt.plaza.domain.model.Role;
@@ -43,6 +44,9 @@ public final class UserServiceOwnerDirectory implements OwnerDirectory {
         if (isNotFound(status)) {
             return Optional.empty();
         }
+        if (isRejected(status)) {
+            throw new AccountLookupRejected();
+        }
         if (!status.is2xxSuccessful()) {
             throw new OwnerDirectoryUnavailable();
         }
@@ -51,6 +55,10 @@ public final class UserServiceOwnerDirectory implements OwnerDirectory {
 
     private static boolean isNotFound(HttpStatusCode status) {
         return status.value() == 404;
+    }
+
+    private static boolean isRejected(HttpStatusCode status) {
+        return status.value() == 401 || status.value() == 403;
     }
 
     private static Account account(AccountPayload body) {

@@ -21,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.foodcourt.plaza.domain.exception.AccessDenied;
 import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
 import com.foodcourt.plaza.domain.exception.InvalidDishText;
@@ -28,6 +29,7 @@ import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Account;
+import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Dish;
 import com.foodcourt.plaza.domain.model.NewDish;
 import com.foodcourt.plaza.domain.model.Restaurant;
@@ -41,6 +43,7 @@ class CreateDishUseCaseTest {
 
     private static final long RESTAURANT_ID = 4L;
     private static final long OWNER_ID = 15L;
+    private static final Caller OWNER = new Caller(OWNER_ID, Role.OWNER);
     private static final String IMAGE = "https://cdn.example.com/dishes/pasta.png";
 
     @Mock
@@ -65,7 +68,7 @@ class CreateDishUseCaseTest {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
         when(dishes.save(any(Dish.class))).thenAnswer(invocation -> withId(invocation.getArgument(0), 21L));
 
-        Dish created = useCase.create(draft("  Pasta   Alfredo  ", 12000, "  Cream   sauce  ", "  Main   course  "));
+        Dish created = useCase.create(OWNER, draft("  Pasta   Alfredo  ", 12000, "  Cream   sauce  ", "  Main   course  "));
 
         ArgumentCaptor<Dish> stored = ArgumentCaptor.forClass(Dish.class);
         verify(dishes).save(stored.capture());
@@ -85,7 +88,7 @@ class CreateDishUseCaseTest {
     @ParameterizedTest
     @MethodSource("invalidPrices")
     void createRejectsAnInvalidPriceBeforeLoadingTheRestaurant(Integer price) {
-        assertThatThrownBy(() -> useCase.create(draft("Pasta", price, "Cream sauce", "Main")))
+        assertThatThrownBy(() -> useCase.create(OWNER, draft("Pasta", price, "Cream sauce", "Main")))
                 .isInstanceOf(InvalidDishPrice.class);
         verify(restaurants, never()).findById(anyLong());
         verify(owners, never()).findById(anyLong());
@@ -95,7 +98,7 @@ class CreateDishUseCaseTest {
     @ParameterizedTest
     @MethodSource("invalidLabels")
     void createRejectsALabelOutsideTheShape(NewDish draft) {
-        assertThatThrownBy(() -> useCase.create(draft)).isInstanceOf(InvalidDishText.class);
+        assertThatThrownBy(() -> useCase.create(OWNER, draft)).isInstanceOf(InvalidDishText.class);
         verify(restaurants, never()).findById(anyLong());
         verify(dishes, never()).save(any());
     }
@@ -103,7 +106,7 @@ class CreateDishUseCaseTest {
     @ParameterizedTest
     @MethodSource("blankTexts")
     void createRejectsBlankTextBeforeLoadingTheRestaurant(NewDish draft) {
-        assertThatThrownBy(() -> useCase.create(draft)).isInstanceOf(InvalidDishText.class);
+        assertThatThrownBy(() -> useCase.create(OWNER, draft)).isInstanceOf(InvalidDishText.class);
         verify(restaurants, never()).findById(anyLong());
         verify(owners, never()).findById(anyLong());
         verify(dishes, never()).save(any());
@@ -112,7 +115,7 @@ class CreateDishUseCaseTest {
     @ParameterizedTest
     @MethodSource("wordlessDescriptions")
     void createRejectsADescriptionWithoutAWordBeforeLoadingTheRestaurant(String description) {
-        assertThatThrownBy(() -> useCase.create(draft("Pasta", 12000, description, "Main")))
+        assertThatThrownBy(() -> useCase.create(OWNER, draft("Pasta", 12000, description, "Main")))
                 .isInstanceOf(InvalidDishDescription.class);
         verify(restaurants, never()).findById(anyLong());
         verify(owners, never()).findById(anyLong());
@@ -123,8 +126,29 @@ class CreateDishUseCaseTest {
     void createRejectsAnUnknownRestaurant() {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.create(draft("Pasta", 12000, "Cream sauce", "Main")))
+        assertThatThrownBy(() -> useCase.create(OWNER, draft("Pasta", 12000, "Cream sauce", "Main")))
                 .isInstanceOf(RestaurantNotFound.class);
+        verify(owners, never()).findById(anyLong());
+        verify(dishes, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Role.class, names = {"ADMINISTRATOR", "EMPLOYEE", "CUSTOMER"})
+    void createRejectsACallerThatIsNotAnOwner(Role role) {
+        when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+
+        assertThatThrownBy(() -> useCase.create(new Caller(OWNER_ID, role), draft("Pasta", 12000, "Cream sauce", "Main")))
+                .isInstanceOf(AccessDenied.class);
+        verify(owners, never()).findById(anyLong());
+        verify(dishes, never()).save(any());
+    }
+
+    @Test
+    void createRejectsAnOwnerOfAnotherRestaurant() {
+        when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+
+        assertThatThrownBy(() -> useCase.create(new Caller(99L, Role.OWNER), draft("Pasta", 12000, "Cream sauce", "Main")))
+                .isInstanceOf(AccessDenied.class);
         verify(owners, never()).findById(anyLong());
         verify(dishes, never()).save(any());
     }
@@ -134,7 +158,7 @@ class CreateDishUseCaseTest {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
         when(owners.findById(OWNER_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.create(draft("Pasta", 12000, "Cream sauce", "Main")))
+        assertThatThrownBy(() -> useCase.create(OWNER, draft("Pasta", 12000, "Cream sauce", "Main")))
                 .isInstanceOf(OwnerNotFound.class);
         verify(dishes, never()).save(any());
     }
@@ -145,7 +169,7 @@ class CreateDishUseCaseTest {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role)));
 
-        assertThatThrownBy(() -> useCase.create(draft("Pasta", 12000, "Cream sauce", "Main")))
+        assertThatThrownBy(() -> useCase.create(OWNER, draft("Pasta", 12000, "Cream sauce", "Main")))
                 .isInstanceOf(OwnerRoleRequired.class);
         verify(dishes, never()).save(any());
     }

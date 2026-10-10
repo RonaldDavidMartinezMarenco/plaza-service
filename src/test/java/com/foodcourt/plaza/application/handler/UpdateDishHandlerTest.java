@@ -10,14 +10,22 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.foodcourt.plaza.domain.api.UpdateDish;
+import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Dish;
 import com.foodcourt.plaza.domain.model.DishUpdate;
+import com.foodcourt.plaza.domain.model.Role;
+import com.foodcourt.plaza.domain.spi.CurrentCaller;
 
 @ExtendWith(MockitoExtension.class)
 class UpdateDishHandlerTest {
 
+    private static final Caller OWNER = new Caller(15L, Role.OWNER);
+
     @Mock
     private UpdateDish updateDish;
+
+    @Mock
+    private CurrentCaller currentCaller;
 
     @Test
     void updateForwardsTheChangeAndReturnsTheStoredDish() {
@@ -31,12 +39,13 @@ class UpdateDishHandlerTest {
                 "https://cdn.example.com/dishes/pasta.png",
                 "Main",
                 true);
-        when(updateDish.update(21L, change)).thenReturn(stored);
-        UpdateDishHandler handler = new UpdateDishHandler(updateDish);
+        when(currentCaller.require()).thenReturn(OWNER);
+        when(updateDish.update(OWNER, 21L, change)).thenReturn(stored);
+        UpdateDishHandler handler = new UpdateDishHandler(updateDish, currentCaller);
 
         Dish result = handler.update(21L, change);
 
         assertThat(result).isEqualTo(stored);
-        verify(updateDish).update(21L, change);
+        verify(updateDish).update(OWNER, 21L, change);
     }
 }

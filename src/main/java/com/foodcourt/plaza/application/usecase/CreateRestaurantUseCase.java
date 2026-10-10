@@ -3,11 +3,13 @@ package com.foodcourt.plaza.application.usecase;
 import org.springframework.stereotype.Service;
 
 import com.foodcourt.plaza.domain.api.CreateRestaurant;
+import com.foodcourt.plaza.domain.exception.AccessDenied;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
 import com.foodcourt.plaza.domain.model.Account;
+import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.NewRestaurant;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.domain.model.RestaurantAddress;
@@ -18,7 +20,7 @@ import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 
 /**
  * Creates a restaurant. Checks run in this order, and a rejection does not save:
- * name, address, owner account with role {@link Role#OWNER}, a unique name
+ * the caller is an administrator, name, address, owner account with role {@link Role#OWNER}, a unique name
  * ignoring case, then a unique NIT. The same owner may own more than one restaurant.
  */
 @Service
@@ -33,13 +35,20 @@ public final class CreateRestaurantUseCase implements CreateRestaurant {
     }
 
     @Override
-    public Restaurant create(NewRestaurant draft) {
+    public Restaurant create(Caller caller, NewRestaurant draft) {
+        requireAdministrator(caller);
         RestaurantName name = requireName(draft);
         RestaurantAddress address = requireAddress(draft);
         requireOwner(draft.ownerId());
         rejectDuplicateName(name);
         rejectDuplicateNit(draft.nit());
         return restaurants.save(stored(draft, name, address));
+    }
+
+    private static void requireAdministrator(Caller caller) {
+        if (caller.role() != Role.ADMINISTRATOR) {
+            throw new AccessDenied();
+        }
     }
 
     private static RestaurantName requireName(NewRestaurant draft) {

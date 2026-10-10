@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.foodcourt.plaza.domain.exception.AccessDenied;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantAddress;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
@@ -27,6 +28,7 @@ import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.model.Account;
+import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.NewRestaurant;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.domain.model.Role;
@@ -37,6 +39,7 @@ import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 class CreateRestaurantUseCaseTest {
 
     private static final long OWNER_ID = 15L;
+    private static final Caller ADMINISTRATOR = new Caller(1L, Role.ADMINISTRATOR);
     private static final String LOGO = "https://cdn.example.com/logos/sushi.png";
 
     @Mock
@@ -58,7 +61,7 @@ class CreateRestaurantUseCaseTest {
         when(restaurants.existsByNit("900123456")).thenReturn(false);
         when(restaurants.save(any(Restaurant.class))).thenAnswer(invocation -> withId(invocation.getArgument(0), 8L));
 
-        Restaurant created = useCase.create(draft("  Sushi 24  ", "900123456"));
+        Restaurant created = useCase.create(ADMINISTRATOR, draft("  Sushi 24  ", "900123456"));
 
         ArgumentCaptor<Restaurant> stored = ArgumentCaptor.forClass(Restaurant.class);
         verify(restaurants).save(stored.capture());
@@ -79,7 +82,7 @@ class CreateRestaurantUseCaseTest {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
         when(restaurants.save(any(Restaurant.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Restaurant created = useCase.create(draft("  La   14  ", "900123456", "  Calle   10  "));
+        Restaurant created = useCase.create(ADMINISTRATOR, draft("  La   14  ", "900123456", "  Calle   10  "));
 
         assertThat(created.name()).isEqualTo("La 14");
         assertThat(created.address()).isEqualTo("Calle 10");
@@ -95,8 +98,8 @@ class CreateRestaurantUseCaseTest {
                 .thenAnswer(invocation -> withId(invocation.getArgument(0), 8L))
                 .thenAnswer(invocation -> withId(invocation.getArgument(0), 9L));
 
-        Restaurant first = useCase.create(draft("Sushi 24", "900123456"));
-        Restaurant second = useCase.create(draft("Plaza-1", "900123457"));
+        Restaurant first = useCase.create(ADMINISTRATOR, draft("Sushi 24", "900123456"));
+        Restaurant second = useCase.create(ADMINISTRATOR, draft("Plaza-1", "900123457"));
 
         ArgumentCaptor<Restaurant> stored = ArgumentCaptor.forClass(Restaurant.class);
         verify(restaurants, times(2)).save(stored.capture());
@@ -108,7 +111,7 @@ class CreateRestaurantUseCaseTest {
 
     @Test
     void createRejectsANameThatIsOnlyDigits() {
-        assertThatThrownBy(() -> useCase.create(draft("  123  ", "900123456")))
+        assertThatThrownBy(() -> useCase.create(ADMINISTRATOR, draft("  123  ", "900123456")))
                 .isInstanceOf(InvalidRestaurantName.class);
         verify(owners, never()).findById(anyLong());
         verify(restaurants, never()).save(any());
@@ -116,8 +119,17 @@ class CreateRestaurantUseCaseTest {
 
     @Test
     void createRejectsAnAddressOutsideTheShape() {
-        assertThatThrownBy(() -> useCase.create(draft("Sushi 24", "900123456", "***")))
+        assertThatThrownBy(() -> useCase.create(ADMINISTRATOR, draft("Sushi 24", "900123456", "***")))
                 .isInstanceOf(InvalidRestaurantAddress.class);
+        verify(owners, never()).findById(anyLong());
+        verify(restaurants, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Role.class, names = {"OWNER", "EMPLOYEE", "CUSTOMER"})
+    void createRejectsACallerThatIsNotAnAdministrator(Role role) {
+        assertThatThrownBy(() -> useCase.create(new Caller(9L, role), draft("Sushi 24", "900123456")))
+                .isInstanceOf(AccessDenied.class);
         verify(owners, never()).findById(anyLong());
         verify(restaurants, never()).save(any());
     }
@@ -126,7 +138,7 @@ class CreateRestaurantUseCaseTest {
     void createRejectsAnUnknownOwner() {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.create(draft("Sushi 24", "900123456")))
+        assertThatThrownBy(() -> useCase.create(ADMINISTRATOR, draft("Sushi 24", "900123456")))
                 .isInstanceOf(OwnerNotFound.class);
         verify(restaurants, never()).existsByName(any());
         verify(restaurants, never()).existsByNit(any());
@@ -138,7 +150,7 @@ class CreateRestaurantUseCaseTest {
     void createRejectsAnAccountThatIsNotAnOwner(Role role) {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role)));
 
-        assertThatThrownBy(() -> useCase.create(draft("Sushi 24", "900123456")))
+        assertThatThrownBy(() -> useCase.create(ADMINISTRATOR, draft("Sushi 24", "900123456")))
                 .isInstanceOf(OwnerRoleRequired.class);
         verify(restaurants, never()).existsByName(any());
         verify(restaurants, never()).existsByNit(any());
@@ -150,7 +162,7 @@ class CreateRestaurantUseCaseTest {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
         when(restaurants.existsByName("la 14")).thenReturn(true);
 
-        assertThatThrownBy(() -> useCase.create(draft("  la   14  ", "900123456")))
+        assertThatThrownBy(() -> useCase.create(ADMINISTRATOR, draft("  la   14  ", "900123456")))
                 .isInstanceOf(RestaurantNameAlreadyRegistered.class);
         verify(restaurants, never()).existsByNit(any());
         verify(restaurants, never()).save(any());
@@ -161,7 +173,7 @@ class CreateRestaurantUseCaseTest {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
         when(restaurants.existsByNit("900123456")).thenReturn(true);
 
-        assertThatThrownBy(() -> useCase.create(draft("Sushi 24", "900123456")))
+        assertThatThrownBy(() -> useCase.create(ADMINISTRATOR, draft("Sushi 24", "900123456")))
                 .isInstanceOf(NitAlreadyRegistered.class);
         verify(restaurants, never()).save(any());
     }

@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+import com.foodcourt.plaza.infrastructure.output.client.BearerTokenRelay;
+
 @Configuration
 public class RestClientConfig {
 
@@ -14,13 +16,14 @@ public class RestClientConfig {
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(2);
 
     @Bean
-    RestClient userServiceClient(ServiceClientsProperties clients) {
+    RestClient userServiceClient(ServiceClientsProperties clients, BearerTokenRelay bearerTokenRelay) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(CONNECT_TIMEOUT);
         factory.setReadTimeout(READ_TIMEOUT);
         return RestClient.builder()
                 .baseUrl(clients.userServiceUrl())
                 .requestFactory(factory)
+                .requestInterceptor(bearerTokenRelay)
                 .build();
     }
 }

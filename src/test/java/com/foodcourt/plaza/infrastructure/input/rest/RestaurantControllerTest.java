@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -23,6 +24,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -39,9 +42,10 @@ import com.foodcourt.plaza.domain.model.NewRestaurant;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.infrastructure.exception.ApiExceptionHandler;
 import com.foodcourt.plaza.infrastructure.security.SecurityConfig;
+import com.foodcourt.plaza.infrastructure.security.SecurityProblemHandlers;
 
 @WebMvcTest(RestaurantController.class)
-@Import({ApiExceptionHandler.class, SecurityConfig.class})
+@Import({ApiExceptionHandler.class, SecurityConfig.class, SecurityProblemHandlers.class})
 class RestaurantControllerTest {
 
     @Autowired
@@ -49,6 +53,9 @@ class RestaurantControllerTest {
 
     @MockitoBean
     private CreateRestaurantHandler handler;
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     @BeforeEach
     void setUp() {
@@ -177,6 +184,27 @@ class RestaurantControllerTest {
                 .andExpect(jsonPath("$.status").value(503));
     }
 
+    @Test
+    void createRejectsAMissingToken() throws Exception {
+        mockMvc.perform(post("/restaurants")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody("Sushi 24", "900123456", "Calle 10", "+573005698325", logo(), "15")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Authentication is required"));
+        verify(handler, never()).create(any());
+    }
+
+    @Test
+    void createRejectsACallerThatIsNotAnAdministrator() throws Exception {
+        mockMvc.perform(post("/restaurants")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_OWNER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody("Sushi 24", "900123456", "Calle 10", "+573005698325", logo(), "15")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You do not have permission for this action"));
+        verify(handler, never()).create(any());
+    }
+
     private static Stream<Arguments> rejectedBodies() {
         return Stream.of(
                 Arguments.of("name with only digits", body("123", "900123456", "Calle 10", "+573005698325", logo(), "15")),
@@ -195,6 +223,7 @@ class RestaurantControllerTest {
 
     private ResultActions postRestaurant(String body) throws Exception {
         return mockMvc.perform(post("/restaurants")
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMINISTRATOR")))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }

@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import com.foodcourt.plaza.domain.exception.AccountLookupRejected;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.model.Account;
 import com.foodcourt.plaza.domain.model.Role;
@@ -48,6 +49,24 @@ class UserServiceOwnerDirectoryTest {
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
         assertThat(directory.findById(15L)).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    void findByIdRejectsAnUnauthorizedDirectory() {
+        server.expect(requestTo("http://user-service/users/15"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+        assertThatThrownBy(() -> directory.findById(15L)).isInstanceOf(AccountLookupRejected.class);
+        server.verify();
+    }
+
+    @Test
+    void findByIdRejectsAForbiddenDirectory() {
+        server.expect(requestTo("http://user-service/users/15"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> directory.findById(15L)).isInstanceOf(AccountLookupRejected.class);
         server.verify();
     }
 

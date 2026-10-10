@@ -21,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.foodcourt.plaza.domain.exception.AccessDenied;
 import com.foodcourt.plaza.domain.exception.DishNotFound;
 import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
@@ -29,6 +30,7 @@ import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Account;
+import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Dish;
 import com.foodcourt.plaza.domain.model.DishUpdate;
 import com.foodcourt.plaza.domain.model.Restaurant;
@@ -43,6 +45,7 @@ class UpdateDishUseCaseTest {
     private static final long DISH_ID = 21L;
     private static final long RESTAURANT_ID = 4L;
     private static final long OWNER_ID = 15L;
+    private static final Caller OWNER = new Caller(OWNER_ID, Role.OWNER);
     private static final String IMAGE = "https://cdn.example.com/dishes/pasta.png";
 
     @Mock
@@ -68,7 +71,7 @@ class UpdateDishUseCaseTest {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
         when(dishes.save(any(Dish.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Dish updated = useCase.update(DISH_ID, new DishUpdate(15000, "  Tomato sauce  "));
+        Dish updated = useCase.update(OWNER, DISH_ID, new DishUpdate(15000, "  Tomato sauce  "));
 
         ArgumentCaptor<Dish> stored = ArgumentCaptor.forClass(Dish.class);
         verify(dishes).save(stored.capture());
@@ -90,7 +93,7 @@ class UpdateDishUseCaseTest {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
         when(dishes.save(any(Dish.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Dish updated = useCase.update(DISH_ID, new DishUpdate(15000, "Tomato sauce"));
+        Dish updated = useCase.update(OWNER, DISH_ID, new DishUpdate(15000, "Tomato sauce"));
 
         assertThat(updated.active()).isFalse();
         assertThat(updated.name()).isEqualTo("Pasta");
@@ -106,7 +109,7 @@ class UpdateDishUseCaseTest {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
         when(dishes.save(any(Dish.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Dish updated = useCase.update(DISH_ID, new DishUpdate(15000, "Cream sauce"));
+        Dish updated = useCase.update(OWNER, DISH_ID, new DishUpdate(15000, "Cream sauce"));
 
         assertThat(updated.price()).isEqualTo(15000);
         assertThat(updated.description()).isEqualTo("Cream sauce");
@@ -119,7 +122,7 @@ class UpdateDishUseCaseTest {
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
         when(dishes.save(any(Dish.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Dish updated = useCase.update(DISH_ID, new DishUpdate(12000, "Tomato sauce"));
+        Dish updated = useCase.update(OWNER, DISH_ID, new DishUpdate(12000, "Tomato sauce"));
 
         assertThat(updated.price()).isEqualTo(12000);
         assertThat(updated.description()).isEqualTo("Tomato sauce");
@@ -132,7 +135,7 @@ class UpdateDishUseCaseTest {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(owner()));
 
-        Dish updated = useCase.update(DISH_ID, new DishUpdate(12000, "  Cream sauce  "));
+        Dish updated = useCase.update(OWNER, DISH_ID, new DishUpdate(12000, "  Cream sauce  "));
 
         assertThat(updated).isEqualTo(current);
         verify(dishes, never()).save(any());
@@ -141,7 +144,7 @@ class UpdateDishUseCaseTest {
     @ParameterizedTest
     @MethodSource("invalidPrices")
     void updateRejectsAnInvalidPriceBeforeLoadingTheDish(Integer price) {
-        assertThatThrownBy(() -> useCase.update(DISH_ID, new DishUpdate(price, "Tomato sauce")))
+        assertThatThrownBy(() -> useCase.update(OWNER, DISH_ID, new DishUpdate(price, "Tomato sauce")))
                 .isInstanceOf(InvalidDishPrice.class);
         verify(dishes, never()).findById(anyLong());
         verify(restaurants, never()).findById(anyLong());
@@ -152,7 +155,7 @@ class UpdateDishUseCaseTest {
     @ParameterizedTest
     @MethodSource("blankDescriptions")
     void updateRejectsABlankDescriptionBeforeLoadingTheDish(String description) {
-        assertThatThrownBy(() -> useCase.update(DISH_ID, new DishUpdate(15000, description)))
+        assertThatThrownBy(() -> useCase.update(OWNER, DISH_ID, new DishUpdate(15000, description)))
                 .isInstanceOf(InvalidDishText.class);
         verify(dishes, never()).findById(anyLong());
         verify(restaurants, never()).findById(anyLong());
@@ -163,7 +166,7 @@ class UpdateDishUseCaseTest {
     @ParameterizedTest
     @MethodSource("wordlessDescriptions")
     void updateRejectsADescriptionWithoutAWordBeforeLoadingTheDish(String description) {
-        assertThatThrownBy(() -> useCase.update(DISH_ID, new DishUpdate(15000, description)))
+        assertThatThrownBy(() -> useCase.update(OWNER, DISH_ID, new DishUpdate(15000, description)))
                 .isInstanceOf(InvalidDishDescription.class);
         verify(dishes, never()).findById(anyLong());
         verify(restaurants, never()).findById(anyLong());
@@ -175,7 +178,7 @@ class UpdateDishUseCaseTest {
     void updateRejectsAnUnknownDish() {
         when(dishes.findById(DISH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.update(DISH_ID, new DishUpdate(15000, "Tomato sauce")))
+        assertThatThrownBy(() -> useCase.update(OWNER, DISH_ID, new DishUpdate(15000, "Tomato sauce")))
                 .isInstanceOf(DishNotFound.class);
         verify(restaurants, never()).findById(anyLong());
         verify(owners, never()).findById(anyLong());
@@ -187,8 +190,31 @@ class UpdateDishUseCaseTest {
         when(dishes.findById(DISH_ID)).thenReturn(Optional.of(stored(true)));
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.update(DISH_ID, new DishUpdate(15000, "Tomato sauce")))
+        assertThatThrownBy(() -> useCase.update(OWNER, DISH_ID, new DishUpdate(15000, "Tomato sauce")))
                 .isInstanceOf(RestaurantNotFound.class);
+        verify(owners, never()).findById(anyLong());
+        verify(dishes, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Role.class, names = {"ADMINISTRATOR", "EMPLOYEE", "CUSTOMER"})
+    void updateRejectsACallerThatIsNotAnOwner(Role role) {
+        when(dishes.findById(DISH_ID)).thenReturn(Optional.of(stored(true)));
+        when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+
+        assertThatThrownBy(() -> useCase.update(new Caller(OWNER_ID, role), DISH_ID, new DishUpdate(15000, "Tomato sauce")))
+                .isInstanceOf(AccessDenied.class);
+        verify(owners, never()).findById(anyLong());
+        verify(dishes, never()).save(any());
+    }
+
+    @Test
+    void updateRejectsAnOwnerOfAnotherRestaurant() {
+        when(dishes.findById(DISH_ID)).thenReturn(Optional.of(stored(true)));
+        when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+
+        assertThatThrownBy(() -> useCase.update(new Caller(99L, Role.OWNER), DISH_ID, new DishUpdate(15000, "Tomato sauce")))
+                .isInstanceOf(AccessDenied.class);
         verify(owners, never()).findById(anyLong());
         verify(dishes, never()).save(any());
     }
@@ -199,7 +225,7 @@ class UpdateDishUseCaseTest {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
         when(owners.findById(OWNER_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.update(DISH_ID, new DishUpdate(15000, "Tomato sauce")))
+        assertThatThrownBy(() -> useCase.update(OWNER, DISH_ID, new DishUpdate(15000, "Tomato sauce")))
                 .isInstanceOf(OwnerNotFound.class);
         verify(dishes, never()).save(any());
     }
@@ -211,7 +237,7 @@ class UpdateDishUseCaseTest {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
         when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role)));
 
-        assertThatThrownBy(() -> useCase.update(DISH_ID, new DishUpdate(15000, "Tomato sauce")))
+        assertThatThrownBy(() -> useCase.update(OWNER, DISH_ID, new DishUpdate(15000, "Tomato sauce")))
                 .isInstanceOf(OwnerRoleRequired.class);
         verify(dishes, never()).save(any());
     }

@@ -3,11 +3,13 @@ package com.foodcourt.plaza.application.usecase;
 import org.springframework.stereotype.Service;
 
 import com.foodcourt.plaza.domain.api.UpdateDish;
+import com.foodcourt.plaza.domain.exception.AccessDenied;
 import com.foodcourt.plaza.domain.exception.DishNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Account;
+import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Dish;
 import com.foodcourt.plaza.domain.model.DishDescription;
 import com.foodcourt.plaza.domain.model.DishPrice;
@@ -21,8 +23,8 @@ import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 /**
  * Updates a dish's price and description. Checks run in this order, and a
  * rejection does not save: a price greater than zero; a description in the
- * description shape; an existing dish; that dish's restaurant; that
- * restaurant's owner account with role {@link Role#OWNER}. When the price and
+ * description shape; an existing dish; that dish's restaurant; the caller is an
+ * {@link Role#OWNER} of that restaurant; then that owner account. When the price and
  * description already match the stored dish, that dish is returned and nothing
  * is saved. Name, image, category, restaurant, and active stay as stored.
  */
@@ -43,11 +45,13 @@ public final class UpdateDishUseCase implements UpdateDish {
     }
 
     @Override
-    public Dish update(long dishId, DishUpdate change) {
+    public Dish update(Caller caller, long dishId, DishUpdate change) {
         DishPrice price = requirePrice(change);
         DishDescription description = requireDescription(change);
         Dish current = requireDish(dishId);
         Restaurant restaurant = requireRestaurant(current.restaurantId());
+        requireOwnerCaller(caller);
+        requireOwnsRestaurant(caller, restaurant);
         requireOwner(restaurant.ownerId());
         return stored(current, price, description);
     }
@@ -66,6 +70,22 @@ public final class UpdateDishUseCase implements UpdateDish {
 
     private Restaurant requireRestaurant(Long restaurantId) {
         return restaurants.findById(restaurantId).orElseThrow(RestaurantNotFound::new);
+    }
+
+    private static void requireOwnerCaller(Caller caller) {
+        if (caller.role() != Role.OWNER) {
+            throw new AccessDenied();
+        }
+    }
+
+    private static void requireOwnsRestaurant(Caller caller, Restaurant restaurant) {
+        if (!owns(caller, restaurant)) {
+            throw new AccessDenied();
+        }
+    }
+
+    private static boolean owns(Caller caller, Restaurant restaurant) {
+        return caller.id() == restaurant.ownerId();
     }
 
     private void requireOwner(Long ownerId) {
