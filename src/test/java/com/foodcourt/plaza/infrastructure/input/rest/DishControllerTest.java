@@ -2,6 +2,7 @@ package com.foodcourt.plaza.infrastructure.input.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -34,7 +36,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.foodcourt.plaza.application.handler.CreateDishHandler;
+import com.foodcourt.plaza.application.handler.SetDishActiveHandler;
 import com.foodcourt.plaza.application.handler.UpdateDishHandler;
+import com.foodcourt.plaza.domain.exception.AccessDenied;
 import com.foodcourt.plaza.domain.exception.DishNotFound;
 import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
@@ -46,12 +50,13 @@ import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Dish;
 import com.foodcourt.plaza.domain.model.DishUpdate;
 import com.foodcourt.plaza.domain.model.NewDish;
+import com.foodcourt.plaza.infrastructure.config.JacksonConfig;
 import com.foodcourt.plaza.infrastructure.exception.ApiExceptionHandler;
 import com.foodcourt.plaza.infrastructure.security.SecurityConfig;
 import com.foodcourt.plaza.infrastructure.security.SecurityProblemHandlers;
 
 @WebMvcTest(DishController.class)
-@Import({ApiExceptionHandler.class, SecurityConfig.class, SecurityProblemHandlers.class})
+@Import({ApiExceptionHandler.class, SecurityConfig.class, SecurityProblemHandlers.class, JacksonConfig.class})
 class DishControllerTest {
 
     @Autowired
@@ -64,11 +69,14 @@ class DishControllerTest {
     private UpdateDishHandler updateDish;
 
     @MockitoBean
+    private SetDishActiveHandler setDishActive;
+
+    @MockitoBean
     private JwtDecoder jwtDecoder;
 
     @BeforeEach
     void setUp() {
-        reset(handler, updateDish);
+        reset(handler, updateDish, setDishActive);
     }
 
     @Test
@@ -328,6 +336,180 @@ class DishControllerTest {
                 .andExpect(jsonPath("$.status").value(503));
     }
 
+    @Test
+    void setActiveReturnsTheDishDisabled() throws Exception {
+        when(setDishActive.setActive(21L, false)).thenReturn(withActive(false));
+
+        putActive(21L, "{\"active\": false}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(21))
+                .andExpect(jsonPath("$.name").value("Pasta"))
+                .andExpect(jsonPath("$.price").value(12000))
+                .andExpect(jsonPath("$.description").value("Cream sauce"))
+                .andExpect(jsonPath("$.imageUrl").value(image()))
+                .andExpect(jsonPath("$.category").value("Main"))
+                .andExpect(jsonPath("$.restaurantId").value(4))
+                .andExpect(jsonPath("$.active").value(false));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void setActiveForwardsTheRequestedState(boolean active) throws Exception {
+        when(setDishActive.setActive(21L, active)).thenReturn(withActive(active));
+
+        putActive(21L, "{\"active\": " + active + "}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(active));
+
+        verify(setDishActive).setActive(21L, active);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("rejectedActiveBodies")
+    void setActiveRejectsAnInvalidBody(String caseName, String body) throws Exception {
+        putActive(21L, body).andExpect(status().isBadRequest());
+        verify(setDishActive, never()).setActive(anyLong(), anyBoolean());
+    }
+
+    @Test
+    void setActiveRejectsAMissingBody() throws Exception {
+        mockMvc.perform(put("/dishes/21/active")
+                        .with(owner())
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+        verify(setDishActive, never()).setActive(anyLong(), anyBoolean());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("rejectedIds")
+    void setActiveRejectsAnInvalidId(String caseName, String id) throws Exception {
+        mockMvc.perform(put("/dishes/" + id + "/active")
+                        .with(owner())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\": false}"))
+                .andExpect(status().isBadRequest());
+        verify(setDishActive, never()).setActive(anyLong(), anyBoolean());
+    }
+
+    @Test
+    void setActiveRejectsAMissingToken() throws Exception {
+        mockMvc.perform(put("/dishes/21/active")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\": false}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Authentication is required"));
+        verify(setDishActive, never()).setActive(anyLong(), anyBoolean());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMINISTRATOR", "EMPLOYEE", "CUSTOMER"})
+    void setActiveRejectsACallerThatIsNotAnOwner(String role) throws Exception {
+        mockMvc.perform(put("/dishes/21/active")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_" + role)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\": false}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You do not have permission for this action"));
+        verify(setDishActive, never()).setActive(anyLong(), anyBoolean());
+    }
+
+    @Test
+    void setActiveRejectsPlainText() throws Exception {
+        mockMvc.perform(put("/dishes/21/active")
+                        .with(owner())
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("{\"active\": false}"))
+                .andExpect(status().isUnsupportedMediaType());
+        verify(setDishActive, never()).setActive(anyLong(), anyBoolean());
+    }
+
+    @Test
+    void setActiveRejectsAnotherRestaurantsOwner() throws Exception {
+        when(setDishActive.setActive(anyLong(), anyBoolean())).thenThrow(new AccessDenied());
+
+        putActive(21L, "{\"active\": false}")
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Forbidden"))
+                .andExpect(jsonPath("$.detail").value("You do not have permission for this action"))
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void setActiveRejectsAnAccountThatIsNotAnOwner() throws Exception {
+        when(setDishActive.setActive(anyLong(), anyBoolean())).thenThrow(new OwnerRoleRequired());
+
+        putActive(21L, "{\"active\": false}")
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Owner role required"))
+                .andExpect(jsonPath("$.detail").value("The account must have the owner role"))
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void setActiveRejectsAnUnknownDish() throws Exception {
+        when(setDishActive.setActive(anyLong(), anyBoolean())).thenThrow(new DishNotFound());
+
+        putActive(21L, "{\"active\": false}")
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Dish not found"))
+                .andExpect(jsonPath("$.detail").value("No dish exists for this id"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void setActiveRejectsAnUnknownRestaurant() throws Exception {
+        when(setDishActive.setActive(anyLong(), anyBoolean())).thenThrow(new RestaurantNotFound());
+
+        putActive(21L, "{\"active\": false}")
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Restaurant not found"))
+                .andExpect(jsonPath("$.detail").value("No restaurant exists for this id"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void setActiveRejectsAnUnknownOwner() throws Exception {
+        when(setDishActive.setActive(anyLong(), anyBoolean())).thenThrow(new OwnerNotFound());
+
+        putActive(21L, "{\"active\": false}")
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Owner not found"))
+                .andExpect(jsonPath("$.detail").value("No account exists for this id"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void setActiveReportsAnUnavailableUserService() throws Exception {
+        when(setDishActive.setActive(anyLong(), anyBoolean())).thenThrow(new OwnerDirectoryUnavailable());
+
+        putActive(21L, "{\"active\": false}")
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("User service unavailable"))
+                .andExpect(jsonPath("$.detail").value("The user service is unavailable"))
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
+    private static Stream<Arguments> rejectedActiveBodies() {
+        return Stream.of(
+                Arguments.of("empty body", ""),
+                Arguments.of("malformed json", "{"),
+                Arguments.of("missing active", "{}"),
+                Arguments.of("null active", "{\"active\": null}"),
+                Arguments.of("text false", "{\"active\": \"false\"}"),
+                Arguments.of("empty string", "{\"active\": \"\"}"),
+                Arguments.of("zero", "{\"active\": 0}"),
+                Arguments.of("one", "{\"active\": 1}"),
+                Arguments.of("array", "{\"active\": [true]}"),
+                Arguments.of("extra price", "{\"active\": false, \"price\": 1}"),
+                Arguments.of("extra name", "{\"active\": false, \"name\": \"Pasta\"}"));
+    }
+
     private static Stream<Arguments> rejectedUpdates() {
         return Stream.of(
                 Arguments.of("missing price", updateMissingPrice()),
@@ -417,6 +599,13 @@ class DishControllerTest {
                 .content(body));
     }
 
+    private ResultActions putActive(long id, String body) throws Exception {
+        return mockMvc.perform(put("/dishes/" + id + "/active")
+                .with(owner())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+    }
+
     private static org.springframework.test.web.servlet.request.RequestPostProcessor owner() {
         return jwt().authorities(new SimpleGrantedAuthority("ROLE_OWNER"));
     }
@@ -489,5 +678,9 @@ class DishControllerTest {
 
     private static Dish revised() {
         return new Dish(21L, 4L, "Pasta", 15000, "Tomato sauce", image(), "Main", true);
+    }
+
+    private static Dish withActive(boolean active) {
+        return new Dish(21L, 4L, "Pasta", 12000, "Cream sauce", image(), "Main", active);
     }
 }

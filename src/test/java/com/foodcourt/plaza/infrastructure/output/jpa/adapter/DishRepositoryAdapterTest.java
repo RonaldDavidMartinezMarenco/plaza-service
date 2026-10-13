@@ -2,6 +2,7 @@ package com.foodcourt.plaza.infrastructure.output.jpa.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
@@ -69,6 +70,22 @@ class DishRepositoryAdapterTest {
                 "https://cdn.example.com/dishes/pasta.png",
                 "Main",
                 false));
+    }
+
+    @Test
+    void updateActiveReturnsTrueWhenOneRowChanges() {
+        when(dishes.updateActive(21L, false)).thenReturn(1);
+
+        assertThat(adapter.updateActive(21L, false)).isTrue();
+        verify(dishes).updateActive(21L, false);
+    }
+
+    @Test
+    void updateActiveReturnsFalseWhenNoRowChanges() {
+        when(dishes.updateActive(21L, true)).thenReturn(0);
+
+        assertThat(adapter.updateActive(21L, true)).isFalse();
+        verify(dishes).updateActive(21L, true);
     }
 
     @Test

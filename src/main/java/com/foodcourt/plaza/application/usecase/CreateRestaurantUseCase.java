@@ -5,10 +5,7 @@ import org.springframework.stereotype.Service;
 import com.foodcourt.plaza.domain.api.CreateRestaurant;
 import com.foodcourt.plaza.domain.exception.AccessDenied;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
-import com.foodcourt.plaza.domain.exception.OwnerNotFound;
-import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
-import com.foodcourt.plaza.domain.model.Account;
 import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.NewRestaurant;
 import com.foodcourt.plaza.domain.model.Restaurant;
@@ -27,11 +24,11 @@ import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 public final class CreateRestaurantUseCase implements CreateRestaurant {
 
     private final RestaurantRepository restaurants;
-    private final OwnerDirectory owners;
+    private final OwnerAccountRule ownerAccounts;
 
     public CreateRestaurantUseCase(RestaurantRepository restaurants, OwnerDirectory owners) {
         this.restaurants = restaurants;
-        this.owners = owners;
+        this.ownerAccounts = new OwnerAccountRule(owners);
     }
 
     @Override
@@ -39,7 +36,7 @@ public final class CreateRestaurantUseCase implements CreateRestaurant {
         requireAdministrator(caller);
         RestaurantName name = requireName(draft);
         RestaurantAddress address = requireAddress(draft);
-        requireOwner(draft.ownerId());
+        ownerAccounts.requireOwner(draft.ownerId());
         rejectDuplicateName(name);
         rejectDuplicateNit(draft.nit());
         return restaurants.save(stored(draft, name, address));
@@ -57,13 +54,6 @@ public final class CreateRestaurantUseCase implements CreateRestaurant {
 
     private static RestaurantAddress requireAddress(NewRestaurant draft) {
         return new RestaurantAddress(draft.address());
-    }
-
-    private void requireOwner(Long ownerId) {
-        Account account = owners.findById(ownerId).orElseThrow(OwnerNotFound::new);
-        if (account.role() != Role.OWNER) {
-            throw new OwnerRoleRequired();
-        }
     }
 
     private void rejectDuplicateName(RestaurantName name) {
