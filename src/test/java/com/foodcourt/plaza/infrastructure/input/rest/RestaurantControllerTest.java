@@ -2,11 +2,13 @@ package com.foodcourt.plaza.infrastructure.input.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -31,6 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.foodcourt.plaza.application.handler.CreateRestaurantHandler;
+import com.foodcourt.plaza.application.handler.FindRestaurantHandler;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantAddress;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
@@ -38,6 +42,7 @@ import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
+import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.NewRestaurant;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.infrastructure.exception.ApiExceptionHandler;
@@ -55,11 +60,64 @@ class RestaurantControllerTest {
     private CreateRestaurantHandler handler;
 
     @MockitoBean
+    private FindRestaurantHandler findHandler;
+
+    @MockitoBean
     private JwtDecoder jwtDecoder;
 
     @BeforeEach
     void setUp() {
-        reset(handler);
+        reset(handler, findHandler);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_OWNER", "ROLE_ADMINISTRATOR"})
+    void findReturnsOnlyTheIdAndTheOwner(String authority) throws Exception {
+        when(findHandler.find(8L)).thenReturn(stored());
+
+        mockMvc.perform(get("/restaurants/8").with(jwt().authorities(new SimpleGrantedAuthority(authority))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(8))
+                .andExpect(jsonPath("$.ownerId").value(15))
+                .andExpect(jsonPath("$.nit").doesNotExist())
+                .andExpect(jsonPath("$.phone").doesNotExist())
+                .andExpect(jsonPath("$.address").doesNotExist());
+    }
+
+    @Test
+    void findRejectsAMissingRestaurant() throws Exception {
+        when(findHandler.find(8L)).thenThrow(new RestaurantNotFound());
+
+        mockMvc.perform(get("/restaurants/8").with(jwt().authorities(new SimpleGrantedAuthority("ROLE_OWNER"))))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Restaurant not found"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1"})
+    void findRejectsAnIdThatIsNotPositive(String id) throws Exception {
+        mockMvc.perform(get("/restaurants/" + id).with(jwt().authorities(new SimpleGrantedAuthority("ROLE_OWNER"))))
+                .andExpect(status().isBadRequest());
+        verify(findHandler, never()).find(anyLong());
+    }
+
+    @Test
+    void findRejectsAMissingToken() throws Exception {
+        mockMvc.perform(get("/restaurants/8"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Authentication is required"));
+        verify(findHandler, never()).find(anyLong());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_EMPLOYEE", "ROLE_CUSTOMER"})
+    void findRejectsAnEmployeeOrACustomer(String authority) throws Exception {
+        mockMvc.perform(get("/restaurants/8").with(jwt().authorities(new SimpleGrantedAuthority(authority))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You do not have permission for this action"));
+        verify(findHandler, never()).find(anyLong());
     }
 
     @Test
