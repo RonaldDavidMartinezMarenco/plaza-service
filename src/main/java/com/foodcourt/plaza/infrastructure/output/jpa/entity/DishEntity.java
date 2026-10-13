@@ -44,7 +44,11 @@ public class DishEntity {
     @Column(name = "category", nullable = false)
     private String category;
 
-    @Column(name = "active", nullable = false)
+    /**
+     * Excluded from the entity update. Price and description saves must not
+     * write back an {@code active} value read before a concurrent change.
+     */
+    @Column(name = "active", nullable = false, updatable = false)
     private boolean active;
 
     protected DishEntity() {

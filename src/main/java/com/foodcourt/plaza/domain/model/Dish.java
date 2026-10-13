@@ -13,4 +13,9 @@ public record Dish(
         String imageUrl,
         String category,
         boolean active) {
+
+    /** Copy with only {@code active} replaced. The caller decides the value. */
+    public Dish withActive(boolean active) {
+        return new Dish(id, restaurantId, name, price, description, imageUrl, category, active);
+    }
 }

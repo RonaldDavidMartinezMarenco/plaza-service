@@ -37,4 +37,10 @@ public class DishRepositoryAdapter implements DishRepository {
         DishEntity stored = dishes.saveAndFlush(mapper.toEntity(dish));
         return mapper.toDomain(stored);
     }
+
+    @Override
+    @Transactional
+    public boolean updateActive(long id, boolean active) {
+        return dishes.updateActive(id, active) == 1;
+    }
 }

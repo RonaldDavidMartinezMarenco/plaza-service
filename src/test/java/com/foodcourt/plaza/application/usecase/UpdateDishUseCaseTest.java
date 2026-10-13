@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
@@ -199,13 +200,9 @@ class UpdateDishUseCaseTest {
     @ParameterizedTest
     @EnumSource(value = Role.class, names = {"ADMINISTRATOR", "EMPLOYEE", "CUSTOMER"})
     void updateRejectsACallerThatIsNotAnOwner(Role role) {
-        when(dishes.findById(DISH_ID)).thenReturn(Optional.of(stored(true)));
-        when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
-
         assertThatThrownBy(() -> useCase.update(new Caller(OWNER_ID, role), DISH_ID, new DishUpdate(15000, "Tomato sauce")))
                 .isInstanceOf(AccessDenied.class);
-        verify(owners, never()).findById(anyLong());
-        verify(dishes, never()).save(any());
+        verifyNoInteractions(dishes, restaurants, owners);
     }
 
     @Test
