@@ -22,6 +22,10 @@ import com.foodcourt.plaza.infrastructure.input.rest.dto.UpdateDishRequest;
 import com.foodcourt.plaza.infrastructure.input.rest.mapper.DishRestMapper;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -62,7 +66,21 @@ class DishController {
             @ApiResponse(responseCode = "503", description = "The user service is unavailable")
     })
     @PreAuthorize("hasRole('OWNER')")
-    public ResponseEntity<DishResponse> create(@Valid @RequestBody CreateDishRequest request) {
+    public ResponseEntity<DishResponse> create(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = CreateDishRequest.class),
+                    examples = @ExampleObject(name = "New dish at La Parrilla", value = """
+                            {
+                              "name": "Bandeja paisa",
+                              "price": 36000,
+                              "description": "Frijoles, arroz, carne molida, chicharrón, huevo y aguacate.",
+                              "imageUrl": "https://images.example.com/dishes/bandeja-paisa.jpg",
+                              "category": "Platos fuertes",
+                              "restaurantId": 1
+                            }
+                            """)))
+            @Valid @RequestBody CreateDishRequest request) {
         Dish dish = createDish.create(mapper.toNewDish(request));
         URI location = URI.create("/dishes/" + dish.id());
         return ResponseEntity.created(location).body(mapper.toResponse(dish));
@@ -80,7 +98,17 @@ class DishController {
     })
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<DishResponse> update(
+            @Parameter(description = "Costillas BBQ after the seed", example = "2")
             @PathVariable @Positive long id,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = UpdateDishRequest.class),
+                    examples = @ExampleObject(name = "Costillas BBQ", value = """
+                            {
+                              "price": 38000,
+                              "description": "Costillas de cerdo en salsa barbacoa con mazorca asada."
+                            }
+                            """)))
             @Valid @RequestBody UpdateDishRequest request) {
         Dish dish = updateDish.update(id, mapper.toDishUpdate(request));
         return ResponseEntity.ok(mapper.toResponse(dish));
@@ -99,7 +127,16 @@ class DishController {
     })
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<DishResponse> setActive(
+            @Parameter(description = "Costillas BBQ after the seed", example = "2")
             @PathVariable @Positive long id,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = SetDishActiveRequest.class),
+                    examples = @ExampleObject(name = "Disable", value = """
+                            {
+                              "active": false
+                            }
+                            """)))
             @Valid @RequestBody SetDishActiveRequest request) {
         Dish dish = setDishActive.setActive(id, request.active());
         return ResponseEntity.ok(mapper.toResponse(dish));

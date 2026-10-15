@@ -20,6 +20,10 @@ import com.foodcourt.plaza.infrastructure.input.rest.dto.RestaurantResponse;
 import com.foodcourt.plaza.infrastructure.input.rest.mapper.RestaurantRestMapper;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -58,7 +62,21 @@ class RestaurantController {
             @ApiResponse(responseCode = "503", description = "The user service is unavailable")
     })
     @PreAuthorize("hasRole('ADMINISTRATOR')")
-    public ResponseEntity<RestaurantResponse> create(@Valid @RequestBody CreateRestaurantRequest request) {
+    public ResponseEntity<RestaurantResponse> create(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = CreateRestaurantRequest.class),
+                    examples = @ExampleObject(name = "New restaurant for Andrés", value = """
+                            {
+                              "name": "Arepa y Mas",
+                              "nit": "900100004",
+                              "address": "Calle 12 # 8-40, Local 103",
+                              "phone": "+576015550104",
+                              "logoUrl": "https://images.example.com/logos/arepa.png",
+                              "ownerId": 4
+                            }
+                            """)))
+            @Valid @RequestBody CreateRestaurantRequest request) {
         Restaurant restaurant = createRestaurant.create(mapper.toNewRestaurant(request));
         URI location = URI.create("/restaurants/" + restaurant.id());
         return ResponseEntity.created(location).body(mapper.toResponse(restaurant));
@@ -74,7 +92,9 @@ class RestaurantController {
             @ApiResponse(responseCode = "404", description = "No restaurant exists for this id")
     })
     @PreAuthorize("hasAnyRole('OWNER', 'ADMINISTRATOR')")
-    public ResponseEntity<RestaurantOwnershipResponse> find(@PathVariable @Positive long id) {
+    public ResponseEntity<RestaurantOwnershipResponse> find(
+            @Parameter(description = "La Parrilla de Carlos after the seed", example = "1")
+            @PathVariable @Positive long id) {
         return ResponseEntity.ok(mapper.toOwnershipResponse(findRestaurant.find(id)));
     }
 }
