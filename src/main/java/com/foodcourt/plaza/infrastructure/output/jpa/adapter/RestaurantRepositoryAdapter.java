@@ -4,12 +4,17 @@ import java.sql.SQLException;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
+import com.foodcourt.plaza.domain.model.PageQuery;
+import com.foodcourt.plaza.domain.model.PageResult;
 import com.foodcourt.plaza.domain.model.Restaurant;
+import com.foodcourt.plaza.domain.model.RestaurantSummary;
 import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 import com.foodcourt.plaza.infrastructure.output.jpa.entity.RestaurantEntity;
 import com.foodcourt.plaza.infrastructure.output.jpa.mapper.RestaurantJpaMapper;
@@ -51,6 +56,13 @@ public class RestaurantRepositoryAdapter implements RestaurantRepository {
     @Transactional(readOnly = true)
     public Optional<Restaurant> findById(long id) {
         return restaurants.findById(id).map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<RestaurantSummary> findPageOrderedByName(PageQuery query) {
+        PageRequest page = PageRequest.of(query.page(), query.size(), Sort.by("name", "id"));
+        return mapper.toSummaryPage(restaurants.findAllBy(page));
     }
 
     @Override

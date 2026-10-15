@@ -14,6 +14,7 @@ import com.foodcourt.plaza.domain.exception.DishNotFound;
 import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
 import com.foodcourt.plaza.domain.exception.InvalidDishText;
+import com.foodcourt.plaza.domain.exception.InvalidPageRequest;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantAddress;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
@@ -66,6 +67,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidDishText.class)
     ProblemDetail invalidDishText(InvalidDishText exception, HttpServletRequest request) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid dish text", exception, request);
+    }
+
+    @ExceptionHandler(InvalidPageRequest.class)
+    ProblemDetail invalidPage(InvalidPageRequest exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid page request", exception, request);
     }
 
     @ExceptionHandler(InvalidDishDescription.class)

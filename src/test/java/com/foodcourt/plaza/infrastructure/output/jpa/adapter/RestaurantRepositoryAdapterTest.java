@@ -7,19 +7,29 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
+import com.foodcourt.plaza.domain.model.PageQuery;
+import com.foodcourt.plaza.domain.model.PageResult;
 import com.foodcourt.plaza.domain.model.Restaurant;
+import com.foodcourt.plaza.domain.model.RestaurantSummary;
 import com.foodcourt.plaza.infrastructure.output.jpa.entity.RestaurantEntity;
+import com.foodcourt.plaza.infrastructure.output.jpa.entity.RestaurantSummaryView;
 import com.foodcourt.plaza.infrastructure.output.jpa.repository.RestaurantJpaRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -77,6 +87,38 @@ class RestaurantRepositoryAdapterTest {
         when(restaurants.findById(8L)).thenReturn(Optional.empty());
 
         assertThat(adapter.findById(8L)).isEmpty();
+    }
+
+    @Test
+    void findPageOrderedByNameReadsTheRequestedPageInNameOrder() {
+        Pageable requested = PageRequest.of(0, 10, Sort.by("name", "id"));
+        when(restaurants.findAllBy(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(summaryView()), requested, 23));
+
+        PageResult<RestaurantSummary> page = adapter.findPageOrderedByName(new PageQuery(0, 10));
+
+        ArgumentCaptor<Pageable> sent = ArgumentCaptor.forClass(Pageable.class);
+        verify(restaurants).findAllBy(sent.capture());
+        assertThat(sent.getValue().getPageNumber()).isZero();
+        assertThat(sent.getValue().getPageSize()).isEqualTo(10);
+        assertThat(sent.getValue().getSort()).isEqualTo(Sort.by("name", "id"));
+        assertThat(page.items()).containsExactly(
+                new RestaurantSummary(8L, "7 Mares Cevichería", "https://images.example.com/logos/7-mares.png"));
+        assertThat(page.page()).isZero();
+        assertThat(page.size()).isEqualTo(10);
+        assertThat(page.totalItems()).isEqualTo(23);
+        assertThat(page.totalPages()).isEqualTo(3);
+    }
+
+    @Test
+    void findPageOrderedByNameReturnsNoPagesWhenTheCatalogIsEmpty() {
+        when(restaurants.findAllBy(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        PageResult<RestaurantSummary> page = adapter.findPageOrderedByName(new PageQuery(0, 10));
+
+        assertThat(page.items()).isEmpty();
+        assertThat(page.totalPages()).isZero();
     }
 
     @Test
@@ -141,6 +183,25 @@ class RestaurantRepositoryAdapterTest {
                 "+573005698325",
                 "https://cdn.example.com/logos/sushi.png",
                 15L);
+    }
+
+    private static RestaurantSummaryView summaryView() {
+        return new RestaurantSummaryView() {
+            @Override
+            public Long getId() {
+                return 8L;
+            }
+
+            @Override
+            public String getName() {
+                return "7 Mares Cevichería";
+            }
+
+            @Override
+            public String getLogoUrl() {
+                return "https://images.example.com/logos/7-mares.png";
+            }
+        };
     }
 
     private static RestaurantEntity row(long id) {
