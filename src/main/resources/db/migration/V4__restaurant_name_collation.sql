@@ -1,0 +1,1 @@
+ALTER TABLE restaurant ALTER COLUMN name TYPE TEXT COLLATE "es-x-icu";
