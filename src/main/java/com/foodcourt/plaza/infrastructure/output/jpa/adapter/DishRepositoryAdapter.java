@@ -2,10 +2,15 @@ package com.foodcourt.plaza.infrastructure.output.jpa.adapter;
 
 import java.util.Optional;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.foodcourt.plaza.domain.model.Dish;
+import com.foodcourt.plaza.domain.model.DishListQuery;
+import com.foodcourt.plaza.domain.model.DishSummary;
+import com.foodcourt.plaza.domain.model.PageResult;
 import com.foodcourt.plaza.domain.spi.DishRepository;
 import com.foodcourt.plaza.infrastructure.output.jpa.entity.DishEntity;
 import com.foodcourt.plaza.infrastructure.output.jpa.mapper.DishJpaMapper;
@@ -42,5 +47,16 @@ public class DishRepositoryAdapter implements DishRepository {
     @Transactional
     public boolean updateActive(long id, boolean active) {
         return dishes.updateActive(id, active) == 1;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<DishSummary> findActivePage(long restaurantId, DishListQuery query) {
+        PageRequest page = PageRequest.of(query.page().page(), query.page().size(), Sort.by("name", "id"));
+        if (query.category() == null) {
+            return mapper.toSummaryPage(dishes.findByRestaurantIdAndActiveTrue(restaurantId, page));
+        }
+        return mapper.toSummaryPage(
+                dishes.findByRestaurantIdAndActiveTrueAndCategory(restaurantId, query.category(), page));
     }
 }
