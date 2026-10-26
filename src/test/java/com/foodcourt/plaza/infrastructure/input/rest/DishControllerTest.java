@@ -5,11 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -17,12 +20,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +41,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.foodcourt.plaza.application.handler.CreateDishHandler;
+import com.foodcourt.plaza.application.handler.ListRestaurantDishesHandler;
 import com.foodcourt.plaza.application.handler.SetDishActiveHandler;
 import com.foodcourt.plaza.application.handler.UpdateDishHandler;
 import com.foodcourt.plaza.domain.exception.AccessDenied;
@@ -48,8 +54,11 @@ import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Dish;
+import com.foodcourt.plaza.domain.model.DishSummary;
 import com.foodcourt.plaza.domain.model.DishUpdate;
 import com.foodcourt.plaza.domain.model.NewDish;
+import com.foodcourt.plaza.domain.model.PageQuery;
+import com.foodcourt.plaza.domain.model.PageResult;
 import com.foodcourt.plaza.infrastructure.config.JacksonConfig;
 import com.foodcourt.plaza.infrastructure.exception.ApiExceptionHandler;
 import com.foodcourt.plaza.infrastructure.security.SecurityConfig;
@@ -72,11 +81,14 @@ class DishControllerTest {
     private SetDishActiveHandler setDishActive;
 
     @MockitoBean
+    private ListRestaurantDishesHandler listRestaurantDishes;
+
+    @MockitoBean
     private JwtDecoder jwtDecoder;
 
     @BeforeEach
     void setUp() {
-        reset(handler, updateDish, setDishActive);
+        reset(handler, updateDish, setDishActive, listRestaurantDishes);
     }
 
     @Test
@@ -583,6 +595,170 @@ class DishControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.detail").value("You do not have permission for this action"));
         verify(handler, never()).create(any());
+    }
+
+    @Test
+    void listReturnsTheActiveMenu() throws Exception {
+        when(listRestaurantDishes.list(eq(1L), eq(new PageQuery(0, 10)), isNull())).thenReturn(menuPage());
+
+        mockMvc.perform(get("/restaurants/1/dishes").with(customer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(1))
+                .andExpect(jsonPath("$.items[0].restaurantId").value(1))
+                .andExpect(jsonPath("$.items[0].name").value("Churrasco"))
+                .andExpect(jsonPath("$.items[0].price").value(45000))
+                .andExpect(jsonPath("$.items[0].description").value(
+                        "Corte de res de 400 g a la parrilla con papas criollas y chimichurri."))
+                .andExpect(jsonPath("$.items[0].imageUrl").value("https://images.example.com/dishes/churrasco.jpg"))
+                .andExpect(jsonPath("$.items[0].category").value("Carnes"))
+                .andExpect(jsonPath("$.items[0].active").doesNotExist())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalItems").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    @Test
+    void listUsesTheDefaultPageWhenTheQueryIsEmpty() throws Exception {
+        when(listRestaurantDishes.list(anyLong(), any(PageQuery.class), isNull()))
+                .thenReturn(new PageResult<>(List.of(), 0, 10, 0));
+        org.mockito.ArgumentCaptor<PageQuery> sent = org.mockito.ArgumentCaptor.forClass(PageQuery.class);
+
+        mockMvc.perform(get("/restaurants/1/dishes").with(customer())).andExpect(status().isOk());
+
+        verify(listRestaurantDishes).list(eq(1L), sent.capture(), isNull());
+        assertThat(sent.getValue()).isEqualTo(new PageQuery(0, 10));
+    }
+
+    @Test
+    void listForwardsTheCategoryWithoutTrimmingIt() throws Exception {
+        when(listRestaurantDishes.list(anyLong(), any(PageQuery.class), eq("  Carnes  ")))
+                .thenReturn(menuPage());
+        org.mockito.ArgumentCaptor<PageQuery> sent = org.mockito.ArgumentCaptor.forClass(PageQuery.class);
+
+        mockMvc.perform(get("/restaurants/1/dishes").param("category", "  Carnes  ").with(customer()))
+                .andExpect(status().isOk());
+
+        verify(listRestaurantDishes).list(eq(1L), sent.capture(), eq("  Carnes  "));
+        assertThat(sent.getValue()).isEqualTo(new PageQuery(0, 10));
+    }
+
+    @Test
+    void listIgnoresASortParameter() throws Exception {
+        when(listRestaurantDishes.list(anyLong(), any(PageQuery.class), isNull())).thenReturn(menuPage());
+        org.mockito.ArgumentCaptor<PageQuery> sent = org.mockito.ArgumentCaptor.forClass(PageQuery.class);
+
+        mockMvc.perform(get("/restaurants/1/dishes").param("sort", "price,desc").with(customer()))
+                .andExpect(status().isOk());
+
+        verify(listRestaurantDishes).list(eq(1L), sent.capture(), isNull());
+        assertThat(sent.getValue()).isEqualTo(new PageQuery(0, 10));
+    }
+
+    @Test
+    void listReturnsAnEmptyPage() throws Exception {
+        when(listRestaurantDishes.list(eq(1L), eq(new PageQuery(3, 10)), isNull()))
+                .thenReturn(new PageResult<>(List.of(), 3, 10, 4));
+
+        mockMvc.perform(get("/restaurants/1/dishes").param("page", "3").param("size", "10").with(customer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.totalItems").value(4))
+                .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "page, -1",
+            "size, 0",
+            "size, 51",
+            "page, abc",
+            "size, 1.5",
+            "page, 2147483648"
+    })
+    void listRejectsAnInvalidPage(String name, String value) throws Exception {
+        mockMvc.perform(get("/restaurants/1/dishes").param(name, value).with(customer()))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(listRestaurantDishes);
+    }
+
+    @Test
+    void listRejectsAPagePastTheIntegerRange() throws Exception {
+        mockMvc.perform(get("/restaurants/1/dishes").param("page", "2147483647").with(customer()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid page request"));
+        verifyNoInteractions(listRestaurantDishes);
+    }
+
+    @Test
+    void listRejectsACategoryLongerThanFifty() throws Exception {
+        mockMvc.perform(get("/restaurants/1/dishes").param("category", "a".repeat(51)).with(customer()))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(listRestaurantDishes);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "123", "Carnes!", "a "})
+    void listRejectsACategoryTheHandlerRefuses(String category) throws Exception {
+        when(listRestaurantDishes.list(eq(1L), any(PageQuery.class), eq(category))).thenThrow(new InvalidDishText());
+
+        mockMvc.perform(get("/restaurants/1/dishes").param("category", category).with(customer()))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid dish text"))
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1", "abc"})
+    void listRejectsAnIdThatIsNotPositive(String id) throws Exception {
+        mockMvc.perform(get("/restaurants/" + id + "/dishes").with(customer()))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(listRestaurantDishes);
+    }
+
+    @Test
+    void listRejectsAMissingRestaurant() throws Exception {
+        when(listRestaurantDishes.list(eq(999L), any(PageQuery.class), isNull())).thenThrow(new RestaurantNotFound());
+
+        mockMvc.perform(get("/restaurants/999/dishes").with(customer()))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Restaurant not found"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void listRejectsAMissingToken() throws Exception {
+        mockMvc.perform(get("/restaurants/1/dishes"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Authentication is required"));
+        verifyNoInteractions(listRestaurantDishes);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_ADMINISTRATOR", "ROLE_OWNER", "ROLE_EMPLOYEE"})
+    void listRejectsACallerThatIsNotACustomer(String authority) throws Exception {
+        mockMvc.perform(get("/restaurants/1/dishes").with(jwt().authorities(new SimpleGrantedAuthority(authority))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You do not have permission for this action"));
+        verifyNoInteractions(listRestaurantDishes);
+    }
+
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor customer() {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+    }
+
+    private static PageResult<DishSummary> menuPage() {
+        DishSummary churrasco = new DishSummary(
+                1L,
+                1L,
+                "Churrasco",
+                45000,
+                "Corte de res de 400 g a la parrilla con papas criollas y chimichurri.",
+                "https://images.example.com/dishes/churrasco.jpg",
+                "Carnes");
+        return new PageResult<>(List.of(churrasco), 0, 10, 2);
     }
 
     private ResultActions postDish(String body) throws Exception {

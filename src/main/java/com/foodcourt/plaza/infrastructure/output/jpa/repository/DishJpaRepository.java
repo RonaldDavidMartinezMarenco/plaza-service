@@ -1,5 +1,7 @@
 package com.foodcourt.plaza.infrastructure.output.jpa.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,4 +19,9 @@ public interface DishJpaRepository extends JpaRepository<DishEntity, Long> {
     @Modifying
     @Query("update DishEntity d set d.active = :active where d.id = :id")
     int updateActive(@Param("id") long id, @Param("active") boolean active);
+
+    Page<DishEntity> findByRestaurantIdAndActiveTrue(long restaurantId, Pageable pageable);
+
+    Page<DishEntity> findByRestaurantIdAndActiveTrueAndCategory(
+            long restaurantId, String category, Pageable pageable);
 }
