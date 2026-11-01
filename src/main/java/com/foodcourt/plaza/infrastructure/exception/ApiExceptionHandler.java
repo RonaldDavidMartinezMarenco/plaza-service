@@ -9,11 +9,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.foodcourt.plaza.domain.exception.AccessDenied;
 import com.foodcourt.plaza.domain.exception.AccountLookupRejected;
+import com.foodcourt.plaza.domain.exception.ActiveOrderExists;
 import com.foodcourt.plaza.domain.exception.AuthenticationRequired;
+import com.foodcourt.plaza.domain.exception.CustomerNotFound;
+import com.foodcourt.plaza.domain.exception.CustomerRoleRequired;
+import com.foodcourt.plaza.domain.exception.DishInactive;
 import com.foodcourt.plaza.domain.exception.DishNotFound;
+import com.foodcourt.plaza.domain.exception.DishRestaurantMismatch;
+import com.foodcourt.plaza.domain.exception.DuplicateOrderLine;
+import com.foodcourt.plaza.domain.exception.EmptyOrder;
 import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
 import com.foodcourt.plaza.domain.exception.InvalidDishText;
+import com.foodcourt.plaza.domain.exception.InvalidOrderQuantity;
 import com.foodcourt.plaza.domain.exception.InvalidPageRequest;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantAddress;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
@@ -117,6 +125,46 @@ public class ApiExceptionHandler {
     @ExceptionHandler(OwnerDirectoryUnavailable.class)
     ProblemDetail directoryDown(OwnerDirectoryUnavailable exception, HttpServletRequest request) {
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "User service unavailable", exception, request);
+    }
+
+    @ExceptionHandler(EmptyOrder.class)
+    ProblemDetail emptyOrder(EmptyOrder exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Empty order", exception, request);
+    }
+
+    @ExceptionHandler(DuplicateOrderLine.class)
+    ProblemDetail duplicateLine(DuplicateOrderLine exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Duplicate dish", exception, request);
+    }
+
+    @ExceptionHandler(InvalidOrderQuantity.class)
+    ProblemDetail invalidQuantity(InvalidOrderQuantity exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid quantity", exception, request);
+    }
+
+    @ExceptionHandler(CustomerNotFound.class)
+    ProblemDetail missingCustomer(CustomerNotFound exception, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Customer not found", exception, request);
+    }
+
+    @ExceptionHandler(CustomerRoleRequired.class)
+    ProblemDetail customerRole(CustomerRoleRequired exception, HttpServletRequest request) {
+        return problem(HttpStatus.FORBIDDEN, "Customer role required", exception, request);
+    }
+
+    @ExceptionHandler(DishInactive.class)
+    ProblemDetail inactiveDish(DishInactive exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Dish inactive", exception, request);
+    }
+
+    @ExceptionHandler(DishRestaurantMismatch.class)
+    ProblemDetail dishRestaurant(DishRestaurantMismatch exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Dish from another restaurant", exception, request);
+    }
+
+    @ExceptionHandler(ActiveOrderExists.class)
+    ProblemDetail activeOrder(ActiveOrderExists exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Active order exists", exception, request);
     }
 
     private static ProblemDetail problem(
