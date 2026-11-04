@@ -148,7 +148,7 @@ class CreateRestaurantUseCaseTest {
     @ParameterizedTest
     @EnumSource(value = Role.class, names = {"ADMINISTRATOR", "EMPLOYEE", "CUSTOMER"})
     void createRejectsAnAccountThatIsNotAnOwner(Role role) {
-        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role)));
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role, null)));
 
         assertThatThrownBy(() -> useCase.create(ADMINISTRATOR, draft("Sushi 24", "900123456")))
                 .isInstanceOf(OwnerRoleRequired.class);
@@ -179,7 +179,7 @@ class CreateRestaurantUseCaseTest {
     }
 
     private static Account owner() {
-        return new Account(OWNER_ID, Role.OWNER);
+        return new Account(OWNER_ID, Role.OWNER, null);
     }
 
     private static NewRestaurant draft(String name, String nit) {

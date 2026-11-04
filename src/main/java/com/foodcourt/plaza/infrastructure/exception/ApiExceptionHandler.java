@@ -17,11 +17,15 @@ import com.foodcourt.plaza.domain.exception.DishInactive;
 import com.foodcourt.plaza.domain.exception.DishNotFound;
 import com.foodcourt.plaza.domain.exception.DishRestaurantMismatch;
 import com.foodcourt.plaza.domain.exception.DuplicateOrderLine;
+import com.foodcourt.plaza.domain.exception.EmployeeNotFound;
+import com.foodcourt.plaza.domain.exception.EmployeeRoleRequired;
+import com.foodcourt.plaza.domain.exception.EmployeeWithoutRestaurant;
 import com.foodcourt.plaza.domain.exception.EmptyOrder;
 import com.foodcourt.plaza.domain.exception.InvalidDishDescription;
 import com.foodcourt.plaza.domain.exception.InvalidDishPrice;
 import com.foodcourt.plaza.domain.exception.InvalidDishText;
 import com.foodcourt.plaza.domain.exception.InvalidOrderQuantity;
+import com.foodcourt.plaza.domain.exception.InvalidOrderStatus;
 import com.foodcourt.plaza.domain.exception.InvalidPageRequest;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantAddress;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
@@ -165,6 +169,26 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ActiveOrderExists.class)
     ProblemDetail activeOrder(ActiveOrderExists exception, HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "Active order exists", exception, request);
+    }
+
+    @ExceptionHandler(InvalidOrderStatus.class)
+    ProblemDetail invalidStatus(InvalidOrderStatus exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid order status", exception, request);
+    }
+
+    @ExceptionHandler(EmployeeNotFound.class)
+    ProblemDetail missingEmployee(EmployeeNotFound exception, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Employee not found", exception, request);
+    }
+
+    @ExceptionHandler(EmployeeRoleRequired.class)
+    ProblemDetail employeeRole(EmployeeRoleRequired exception, HttpServletRequest request) {
+        return problem(HttpStatus.FORBIDDEN, "Employee role required", exception, request);
+    }
+
+    @ExceptionHandler(EmployeeWithoutRestaurant.class)
+    ProblemDetail employeeWithoutRestaurant(EmployeeWithoutRestaurant exception, HttpServletRequest request) {
+        return problem(HttpStatus.FORBIDDEN, "Employee without restaurant", exception, request);
     }
 
     private static ProblemDetail problem(

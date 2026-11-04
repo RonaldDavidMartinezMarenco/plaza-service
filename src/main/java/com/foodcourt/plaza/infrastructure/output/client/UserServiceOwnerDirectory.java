@@ -65,10 +65,10 @@ public final class UserServiceOwnerDirectory implements OwnerDirectory {
         if (body == null || body.id() == null || body.role() == null) {
             throw new OwnerDirectoryUnavailable();
         }
-        return new Account(body.id(), body.role());
+        return new Account(body.id(), body.role(), body.restaurantId());
     }
 
     /** Body of {@code GET /users/{id}}. The domain does not depend on this type. */
-    record AccountPayload(Long id, Role role) {
+    record AccountPayload(Long id, Role role, Long restaurantId) {
     }
 }

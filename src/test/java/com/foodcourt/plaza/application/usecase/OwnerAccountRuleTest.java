@@ -37,7 +37,7 @@ class OwnerAccountRuleTest {
 
     @Test
     void requireOwnerAcceptsAnOwnerAccount() {
-        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, Role.OWNER)));
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, Role.OWNER, null)));
 
         assertThatCode(() -> rule.requireOwner(OWNER_ID)).doesNotThrowAnyException();
     }
@@ -52,7 +52,7 @@ class OwnerAccountRuleTest {
     @ParameterizedTest
     @EnumSource(value = Role.class, names = {"ADMINISTRATOR", "EMPLOYEE", "CUSTOMER"})
     void requireOwnerRejectsAnAccountThatIsNotAnOwner(Role role) {
-        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role)));
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role, null)));
 
         assertThatThrownBy(() -> rule.requireOwner(OWNER_ID)).isInstanceOf(OwnerRoleRequired.class);
     }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,15 +15,25 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import com.foodcourt.plaza.domain.exception.ActiveOrderExists;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
+import com.foodcourt.plaza.domain.model.OrderListQuery;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.PageQuery;
+import com.foodcourt.plaza.domain.model.PageResult;
 import com.foodcourt.plaza.infrastructure.output.jpa.entity.CustomerOrderEntity;
 import com.foodcourt.plaza.infrastructure.output.jpa.entity.OrderLineEntity;
 import com.foodcourt.plaza.infrastructure.output.jpa.repository.CustomerOrderJpaRepository;
@@ -106,6 +117,61 @@ class OrderRepositoryAdapterTest {
 
         assertThatThrownBy(() -> adapter.save(Order.place(CUSTOMER_ID, 1L, List.of(new OrderLine(1L, 1)))))
                 .isSameAs(failure);
+    }
+
+    @ParameterizedTest
+    @EnumSource(OrderStatus.class)
+    void findPageFiltersByRestaurantStatusAndId(OrderStatus status) {
+        CustomerOrderEntity row = order(4L, 1L);
+        when(orders.findByRestaurantIdAndStatus(eq(1L), eq(status), any())).thenReturn(new PageImpl<>(List.of(row)));
+        when(orders.findByIdIn(List.of(4L))).thenReturn(List.of(row));
+
+        PageResult<Order> result = adapter.findPage(1L, new OrderListQuery(new PageQuery(0, 10), status));
+
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(orders).findByRestaurantIdAndStatus(eq(1L), eq(status), pageable.capture());
+        assertThat(pageable.getValue().getPageNumber()).isZero();
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(10);
+        assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.ASC, "id"));
+        assertThat(result.items()).extracting(Order::id).containsExactly(4L);
+        assertThat(result.items().get(0).lines()).containsExactly(new OrderLine(1L, 1));
+    }
+
+    @Test
+    void findPageSkipsLinesWhenThePageIsEmpty() {
+        Page<CustomerOrderEntity> empty = new PageImpl<>(List.of(), PageRequest.of(3, 10), 0);
+        when(orders.findByRestaurantIdAndStatus(eq(1L), eq(OrderStatus.CANCELLED), any())).thenReturn(empty);
+
+        PageResult<Order> result = adapter.findPage(
+                1L,
+                new OrderListQuery(new PageQuery(3, 10), OrderStatus.CANCELLED));
+
+        verify(orders, never()).findByIdIn(any());
+        assertThat(result.items()).isEmpty();
+        assertThat(result.page()).isEqualTo(3);
+        assertThat(result.totalItems()).isZero();
+        assertThat(result.totalPages()).isZero();
+    }
+
+    @Test
+    void findPageKeepsThePageOrderWhenLinesComeBackReversed() {
+        CustomerOrderEntity first = order(1L, 1L);
+        CustomerOrderEntity second = order(2L, 4L);
+        when(orders.findByRestaurantIdAndStatus(eq(1L), eq(OrderStatus.PENDING), any()))
+                .thenReturn(new PageImpl<>(List.of(first, second)));
+        when(orders.findByIdIn(List.of(1L, 2L))).thenReturn(List.of(second, first));
+
+        PageResult<Order> result = adapter.findPage(1L, new OrderListQuery(new PageQuery(0, 10), OrderStatus.PENDING));
+
+        assertThat(result.items()).extracting(Order::id).containsExactly(1L, 2L);
+        assertThat(result.items().get(0).lines()).containsExactly(new OrderLine(1L, 1));
+        assertThat(result.items().get(1).lines()).containsExactly(new OrderLine(4L, 1));
+    }
+
+    private static CustomerOrderEntity order(long id, long dishId) {
+        CustomerOrderEntity entity = new CustomerOrderEntity(id, CUSTOMER_ID, 1L, OrderStatus.PENDING, null, "hash");
+        entity.addLine(new OrderLineEntity(id, dishId, 1));
+        return entity;
     }
 
     private static CustomerOrderEntity stored(CustomerOrderEntity row) {

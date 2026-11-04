@@ -2,14 +2,20 @@ package com.foodcourt.plaza.infrastructure.output.jpa.adapter;
 
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.List;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.foodcourt.plaza.domain.exception.ActiveOrderExists;
 import com.foodcourt.plaza.domain.model.Order;
+import com.foodcourt.plaza.domain.model.OrderListQuery;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.PageResult;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
 import com.foodcourt.plaza.infrastructure.output.jpa.entity.CustomerOrderEntity;
 import com.foodcourt.plaza.infrastructure.output.jpa.mapper.OrderJpaMapper;
@@ -51,6 +57,23 @@ public class OrderRepositoryAdapter implements OrderRepository {
         } catch (DataIntegrityViolationException failure) {
             throw translated(failure);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<Order> findPage(long restaurantId, OrderListQuery query) {
+        Page<CustomerOrderEntity> stored = orders.findByRestaurantIdAndStatus(
+                restaurantId,
+                query.status(),
+                PageRequest.of(query.page().page(), query.page().size(), Sort.by("id")));
+        if (stored.isEmpty()) {
+            return mapper.toPage(stored, List.of());
+        }
+        return mapper.toPage(stored, orders.findByIdIn(ids(stored)));
+    }
+
+    private static List<Long> ids(Page<CustomerOrderEntity> stored) {
+        return stored.getContent().stream().map(CustomerOrderEntity::getId).toList();
     }
 
     private static Collection<OrderStatus> inProgress() {

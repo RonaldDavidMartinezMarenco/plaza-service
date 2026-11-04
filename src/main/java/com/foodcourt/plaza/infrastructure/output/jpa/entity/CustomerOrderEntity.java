@@ -14,6 +14,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
 /**
@@ -44,6 +45,7 @@ public class CustomerOrderEntity {
     @Column(name = "pin_hash", length = 72)
     private String pinHash;
 
+    @OrderBy("id ASC")
     @OneToMany(mappedBy = "order", cascade = CascadeType.PERSIST)
     private List<OrderLineEntity> lines = new ArrayList<>();
 
