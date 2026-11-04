@@ -3,6 +3,7 @@ package com.foodcourt.plaza.infrastructure.output.jpa.adapter;
 import java.sql.SQLException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -70,6 +71,24 @@ public class OrderRepositoryAdapter implements OrderRepository {
             return mapper.toPage(stored, List.of());
         }
         return mapper.toPage(stored, orders.findByIdIn(ids(stored)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Order> findByIdAndRestaurantId(long orderId, long restaurantId) {
+        return orders.findByIdAndRestaurantId(orderId, restaurantId).map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional
+    public boolean assignIfPending(long orderId, long restaurantId, long employeeId) {
+        int updated = orders.assignIfPending(
+                orderId,
+                restaurantId,
+                employeeId,
+                OrderStatus.PENDING,
+                OrderStatus.IN_PREPARATION);
+        return updated == 1;
     }
 
     private static List<Long> ids(Page<CustomerOrderEntity> stored) {

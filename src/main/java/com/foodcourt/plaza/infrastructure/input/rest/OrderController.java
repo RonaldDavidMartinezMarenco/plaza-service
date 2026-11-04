@@ -6,11 +6,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.foodcourt.plaza.application.handler.AssignOrderHandler;
 import com.foodcourt.plaza.application.handler.ListRestaurantOrdersHandler;
 import com.foodcourt.plaza.application.handler.PlaceOrderHandler;
 import com.foodcourt.plaza.domain.model.Order;
@@ -35,10 +37,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
 /**
- * Places an order for a customer and lists orders for an employee.
+ * Places an order for a customer, lists orders for an employee, and lets that employee take one.
  * The class is not final: {@code @Validated} and method security need a CGLIB subclass.
  */
 @RestController
@@ -49,11 +52,53 @@ class OrderController {
 
     private final PlaceOrderHandler placeOrder;
     private final ListRestaurantOrdersHandler listOrders;
+    private final AssignOrderHandler assignOrder;
     private final OrderRestMapper mapper = new OrderRestMapper();
 
-    OrderController(PlaceOrderHandler placeOrder, ListRestaurantOrdersHandler listOrders) {
+    OrderController(
+            PlaceOrderHandler placeOrder,
+            ListRestaurantOrdersHandler listOrders,
+            AssignOrderHandler assignOrder) {
         this.placeOrder = placeOrder;
         this.listOrders = listOrders;
+        this.assignOrder = assignOrder;
+    }
+
+    @PostMapping("/orders/{orderId}/assignment")
+    @Operation(
+            summary = "Assign the order and start preparation",
+            description = "The employee comes from the access token and must belong to the order's restaurant. "
+                    + "The order must be PENDING and unassigned. It becomes IN_PREPARATION. "
+                    + "A second call, another employee, and any other status are rejected. pinHash is omitted.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Order assigned", content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = OrderResponse.class),
+                    examples = @ExampleObject(name = "Camila's order taken by Pedro", value = """
+                            {
+                              "id": 1,
+                              "customerId": 9,
+                              "restaurantId": 1,
+                              "status": "IN_PREPARATION",
+                              "assignedEmployeeId": 5,
+                              "lines": [
+                                { "dishId": 1, "quantity": 1 },
+                                { "dishId": 4, "quantity": 2 }
+                              ]
+                            }
+                            """))),
+            @ApiResponse(responseCode = "400", description = "The order id is not a positive integer"),
+            @ApiResponse(responseCode = "401", description = "Missing or invalid access token"),
+            @ApiResponse(responseCode = "403", description = "The caller is not an employee of a restaurant"),
+            @ApiResponse(responseCode = "404", description = "The order, the employee account, or its restaurant does not exist"),
+            @ApiResponse(responseCode = "409", description = "The order is not a pending unassigned order"),
+            @ApiResponse(responseCode = "503", description = "The user service is unavailable")
+    })
+    @PreAuthorize("hasRole('EMPLOYEE')")
+    public ResponseEntity<OrderResponse> assign(
+            @Parameter(description = "Camila's order at La Parrilla after the seed", example = "1")
+            @PathVariable @Positive long orderId) {
+        return ResponseEntity.ok(mapper.toResponse(assignOrder.assign(orderId)));
     }
 
     @GetMapping("/orders")
