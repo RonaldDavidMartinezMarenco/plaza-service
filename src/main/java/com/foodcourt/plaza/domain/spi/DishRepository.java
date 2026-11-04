@@ -15,6 +15,7 @@ public interface DishRepository {
     /**
      * One page of active dishes, ordered by name and then id.
      * A null category lists every active dish of the restaurant.
+     * Any other category matches the stored text without regard to capitals.
      */
     PageResult<DishSummary> findActivePage(long restaurantId, DishListQuery query);
 

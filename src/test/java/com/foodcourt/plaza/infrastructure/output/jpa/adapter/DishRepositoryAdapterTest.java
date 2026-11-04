@@ -118,7 +118,7 @@ class DishRepositoryAdapterTest {
 
         ArgumentCaptor<Pageable> sent = ArgumentCaptor.forClass(Pageable.class);
         verify(dishes).findByRestaurantIdAndActiveTrue(eq(4L), sent.capture());
-        verify(dishes, never()).findByRestaurantIdAndActiveTrueAndCategory(anyLong(), any(), any());
+        verify(dishes, never()).findByRestaurantIdAndActiveTrueAndCategoryIgnoreCase(anyLong(), any(), any());
         assertThat(sent.getValue().getPageNumber()).isZero();
         assertThat(sent.getValue().getPageSize()).isEqualTo(10);
         assertThat(sent.getValue().getSort()).isEqualTo(Sort.by("name", "id"));
@@ -128,15 +128,15 @@ class DishRepositoryAdapterTest {
     }
 
     @Test
-    void findActivePageFiltersByCategory() {
+    void findActivePageFiltersByCategoryIgnoringCapitals() {
         Pageable requested = PageRequest.of(1, 5, Sort.by("name", "id"));
-        when(dishes.findByRestaurantIdAndActiveTrueAndCategory(eq(1L), eq("Carnes"), any(Pageable.class)))
+        when(dishes.findByRestaurantIdAndActiveTrueAndCategoryIgnoreCase(eq(1L), eq("carnes"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(row(true)), requested, 10));
 
-        PageResult<DishSummary> page = adapter.findActivePage(1L, new DishListQuery(new PageQuery(1, 5), "Carnes"));
+        PageResult<DishSummary> page = adapter.findActivePage(1L, new DishListQuery(new PageQuery(1, 5), "carnes"));
 
         ArgumentCaptor<Pageable> sent = ArgumentCaptor.forClass(Pageable.class);
-        verify(dishes).findByRestaurantIdAndActiveTrueAndCategory(eq(1L), eq("Carnes"), sent.capture());
+        verify(dishes).findByRestaurantIdAndActiveTrueAndCategoryIgnoreCase(eq(1L), eq("carnes"), sent.capture());
         verify(dishes, never()).findByRestaurantIdAndActiveTrue(anyLong(), any());
         assertThat(sent.getValue().getPageNumber()).isEqualTo(1);
         assertThat(sent.getValue().getPageSize()).isEqualTo(5);

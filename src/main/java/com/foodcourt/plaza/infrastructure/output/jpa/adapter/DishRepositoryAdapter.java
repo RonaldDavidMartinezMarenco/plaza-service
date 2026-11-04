@@ -57,6 +57,6 @@ public class DishRepositoryAdapter implements DishRepository {
             return mapper.toSummaryPage(dishes.findByRestaurantIdAndActiveTrue(restaurantId, page));
         }
         return mapper.toSummaryPage(
-                dishes.findByRestaurantIdAndActiveTrueAndCategory(restaurantId, query.category(), page));
+                dishes.findByRestaurantIdAndActiveTrueAndCategoryIgnoreCase(restaurantId, query.category(), page));
     }
 }
