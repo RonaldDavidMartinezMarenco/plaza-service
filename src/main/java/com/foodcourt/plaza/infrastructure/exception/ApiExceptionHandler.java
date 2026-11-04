@@ -31,6 +31,9 @@ import com.foodcourt.plaza.domain.exception.InvalidRestaurantAddress;
 import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
+import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
+import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
@@ -189,6 +192,21 @@ public class ApiExceptionHandler {
     @ExceptionHandler(EmployeeWithoutRestaurant.class)
     ProblemDetail employeeWithoutRestaurant(EmployeeWithoutRestaurant exception, HttpServletRequest request) {
         return problem(HttpStatus.FORBIDDEN, "Employee without restaurant", exception, request);
+    }
+
+    @ExceptionHandler(OrderNotFound.class)
+    ProblemDetail missingOrder(OrderNotFound exception, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Order not found", exception, request);
+    }
+
+    @ExceptionHandler(OrderNotAssignable.class)
+    ProblemDetail orderNotAssignable(OrderNotAssignable exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Order cannot be assigned", exception, request);
+    }
+
+    @ExceptionHandler(OrderAlreadyAssigned.class)
+    ProblemDetail orderAlreadyAssigned(OrderAlreadyAssigned exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Order already assigned", exception, request);
     }
 
     private static ProblemDetail problem(

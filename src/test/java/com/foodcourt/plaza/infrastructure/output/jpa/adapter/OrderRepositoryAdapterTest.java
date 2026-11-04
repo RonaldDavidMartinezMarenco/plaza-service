@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import java.sql.SQLException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -166,6 +167,43 @@ class OrderRepositoryAdapterTest {
         assertThat(result.items()).extracting(Order::id).containsExactly(1L, 2L);
         assertThat(result.items().get(0).lines()).containsExactly(new OrderLine(1L, 1));
         assertThat(result.items().get(1).lines()).containsExactly(new OrderLine(4L, 1));
+    }
+
+    @Test
+    void findByIdAndRestaurantIdLoadsTheLines() {
+        CustomerOrderEntity row = order(1L, 1L);
+        when(orders.findByIdAndRestaurantId(1L, 1L)).thenReturn(Optional.of(row));
+
+        assertThat(adapter.findByIdAndRestaurantId(1L, 1L)).contains(new Order(
+                1L,
+                CUSTOMER_ID,
+                1L,
+                OrderStatus.PENDING,
+                null,
+                "hash",
+                List.of(new OrderLine(1L, 1))));
+    }
+
+    @Test
+    void findByIdAndRestaurantIdIsEmptyWhenTheRowIsMissing() {
+        when(orders.findByIdAndRestaurantId(9L, 2L)).thenReturn(Optional.empty());
+
+        assertThat(adapter.findByIdAndRestaurantId(9L, 2L)).isEmpty();
+    }
+
+    @Test
+    void assignIfPendingIsTrueWhenOneRowChanges() {
+        when(orders.assignIfPending(1L, 1L, 5L, OrderStatus.PENDING, OrderStatus.IN_PREPARATION)).thenReturn(1);
+
+        assertThat(adapter.assignIfPending(1L, 1L, 5L)).isTrue();
+        verify(orders).assignIfPending(1L, 1L, 5L, OrderStatus.PENDING, OrderStatus.IN_PREPARATION);
+    }
+
+    @Test
+    void assignIfPendingIsFalseWhenNoRowChanges() {
+        when(orders.assignIfPending(1L, 1L, 6L, OrderStatus.PENDING, OrderStatus.IN_PREPARATION)).thenReturn(0);
+
+        assertThat(adapter.assignIfPending(1L, 1L, 6L)).isFalse();
     }
 
     private static CustomerOrderEntity order(long id, long dishId) {

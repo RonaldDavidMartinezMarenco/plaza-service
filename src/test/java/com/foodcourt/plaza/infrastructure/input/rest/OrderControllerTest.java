@@ -29,6 +29,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.foodcourt.plaza.application.handler.AssignOrderHandler;
 import com.foodcourt.plaza.application.handler.ListRestaurantOrdersHandler;
 import com.foodcourt.plaza.application.handler.PlaceOrderHandler;
 import com.foodcourt.plaza.domain.exception.ActiveOrderExists;
@@ -43,6 +44,9 @@ import com.foodcourt.plaza.domain.exception.DishRestaurantMismatch;
 import com.foodcourt.plaza.domain.exception.DuplicateOrderLine;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.InvalidOrderStatus;
+import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
+import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
@@ -68,6 +72,9 @@ class OrderControllerTest {
 
     @MockitoBean
     private ListRestaurantOrdersHandler listOrders;
+
+    @MockitoBean
+    private AssignOrderHandler assignOrder;
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
@@ -365,6 +372,148 @@ class OrderControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid order status"))
                 .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void assignReturnsTheOrderInPreparation() throws Exception {
+        when(assignOrder.assign(1L)).thenReturn(claimed());
+
+        assign("/orders/1/assignment")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.customerId").value(9))
+                .andExpect(jsonPath("$.restaurantId").value(1))
+                .andExpect(jsonPath("$.status").value("IN_PREPARATION"))
+                .andExpect(jsonPath("$.assignedEmployeeId").value(5))
+                .andExpect(jsonPath("$.pinHash").doesNotExist())
+                .andExpect(jsonPath("$.lines[0].dishId").value(1))
+                .andExpect(jsonPath("$.lines[0].quantity").value(1))
+                .andExpect(jsonPath("$.lines[1].dishId").value(4))
+                .andExpect(jsonPath("$.lines[1].quantity").value(2));
+        verify(assignOrder).assign(1L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/orders/0/assignment", "/orders/-1/assignment", "/orders/abc/assignment"})
+    void assignRejectsAnInvalidOrderId(String path) throws Exception {
+        assign(path).andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        verifyNoInteractions(assignOrder);
+    }
+
+    @Test
+    void assignRejectsAMissingToken() throws Exception {
+        mockMvc.perform(post("/orders/1/assignment"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Authentication is required"));
+        verifyNoInteractions(assignOrder);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_ADMINISTRATOR", "ROLE_OWNER", "ROLE_CUSTOMER"})
+    void assignRejectsACallerThatIsNotAnEmployee(String authority) throws Exception {
+        mockMvc.perform(post("/orders/1/assignment")
+                        .with(jwt().authorities(new SimpleGrantedAuthority(authority))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You do not have permission for this action"));
+        verifyNoInteractions(assignOrder);
+    }
+
+    @Test
+    void assignRejectsAMissingOrder() throws Exception {
+        when(assignOrder.assign(1L)).thenThrow(new OrderNotFound());
+
+        assign("/orders/1/assignment")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Order not found"))
+                .andExpect(jsonPath("$.detail").value("No order exists for this id"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void assignRejectsAMissingEmployee() throws Exception {
+        when(assignOrder.assign(1L)).thenThrow(new EmployeeNotFound());
+
+        assign("/orders/1/assignment")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Employee not found"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void assignRejectsAMissingRestaurant() throws Exception {
+        when(assignOrder.assign(1L)).thenThrow(new RestaurantNotFound());
+
+        assign("/orders/1/assignment")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Restaurant not found"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void assignRejectsAnAccountThatIsNotAnEmployee() throws Exception {
+        when(assignOrder.assign(1L)).thenThrow(new EmployeeRoleRequired());
+
+        assign("/orders/1/assignment")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Employee role required"))
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void assignRejectsAnEmployeeWithoutARestaurant() throws Exception {
+        when(assignOrder.assign(1L)).thenThrow(new EmployeeWithoutRestaurant());
+
+        assign("/orders/1/assignment")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Employee without restaurant"))
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void assignRejectsAnOrderThatIsNotPending() throws Exception {
+        when(assignOrder.assign(1L)).thenThrow(new OrderNotAssignable(OrderStatus.READY));
+
+        assign("/orders/1/assignment")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Order cannot be assigned"))
+                .andExpect(jsonPath("$.detail").value("The order is READY and cannot be assigned"))
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    void assignRejectsAnOrderThatAlreadyHasAnEmployee() throws Exception {
+        when(assignOrder.assign(1L)).thenThrow(new OrderAlreadyAssigned());
+
+        assign("/orders/1/assignment")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Order already assigned"))
+                .andExpect(jsonPath("$.detail").value("The order already has an assigned employee"))
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    void assignRejectsWhenTheUserServiceIsDown() throws Exception {
+        when(assignOrder.assign(1L)).thenThrow(new OwnerDirectoryUnavailable());
+
+        assign("/orders/1/assignment")
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.title").value("User service unavailable"))
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
+    private ResultActions assign(String path) throws Exception {
+        return mockMvc.perform(post(path).with(employee()));
+    }
+
+    private static Order claimed() {
+        return new Order(
+                1L,
+                9L,
+                1L,
+                OrderStatus.IN_PREPARATION,
+                5L,
+                null,
+                List.of(new OrderLine(1L, 1), new OrderLine(4L, 2)));
     }
 
     private ResultActions list(String query) throws Exception {
