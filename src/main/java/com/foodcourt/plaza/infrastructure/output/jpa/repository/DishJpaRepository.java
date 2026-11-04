@@ -22,6 +22,9 @@ public interface DishJpaRepository extends JpaRepository<DishEntity, Long> {
 
     Page<DishEntity> findByRestaurantIdAndActiveTrue(long restaurantId, Pageable pageable);
 
-    Page<DishEntity> findByRestaurantIdAndActiveTrueAndCategory(
+    /**
+     * Category match ignores capitals. The stored text is returned unchanged.
+     */
+    Page<DishEntity> findByRestaurantIdAndActiveTrueAndCategoryIgnoreCase(
             long restaurantId, String category, Pageable pageable);
 }

@@ -125,7 +125,8 @@ class DishController {
             @Parameter(description = "Dishes per page, from 1 to 50", example = "10")
             @RequestParam(defaultValue = "10") @Min(1) @Max(PageQuery.MAX_SIZE) int size,
             @Parameter(
-                    description = "Stored category. Omit it to list every active dish. "
+                    description = "Stored category, ignoring capitals. Omit it to list every active dish. "
+                            + "The response keeps the stored capitals. "
                             + "A value that is not a category shape is rejected by the service.",
                     example = "Carnes")
             @RequestParam(required = false)
