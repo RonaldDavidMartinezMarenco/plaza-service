@@ -39,7 +39,27 @@ class UserServiceOwnerDirectoryTest {
 
         Optional<Account> account = directory.findById(15L);
 
-        assertThat(account).contains(new Account(15L, Role.OWNER));
+        assertThat(account).contains(new Account(15L, Role.OWNER, null));
+        server.verify();
+    }
+
+    @Test
+    void findByIdReturnsTheEmployeeRestaurant() {
+        server.expect(requestTo("http://user-service/users/5"))
+                .andRespond(withSuccess(
+                        "{\"id\":5,\"role\":\"EMPLOYEE\",\"restaurantId\":1}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThat(directory.findById(5L)).contains(new Account(5L, Role.EMPLOYEE, 1L));
+        server.verify();
+    }
+
+    @Test
+    void findByIdLeavesTheRestaurantEmptyWhenTheBodyOmitsIt() {
+        server.expect(requestTo("http://user-service/users/9"))
+                .andRespond(withSuccess("{\"id\":9,\"role\":\"CUSTOMER\"}", MediaType.APPLICATION_JSON));
+
+        assertThat(directory.findById(9L)).contains(new Account(9L, Role.CUSTOMER, null));
         server.verify();
     }
 

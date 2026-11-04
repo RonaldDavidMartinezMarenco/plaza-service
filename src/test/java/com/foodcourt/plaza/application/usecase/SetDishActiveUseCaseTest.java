@@ -158,7 +158,7 @@ class SetDishActiveUseCaseTest {
     void setActiveRejectsAnAccountThatIsNotAnOwner(Role role) {
         when(dishes.findById(DISH_ID)).thenReturn(Optional.of(stored(true)));
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
-        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role)));
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role, null)));
 
         assertThatThrownBy(() -> useCase.setActive(OWNER, DISH_ID, false)).isInstanceOf(OwnerRoleRequired.class);
         verify(dishes, never()).updateActive(anyLong(), anyBoolean());
@@ -187,7 +187,7 @@ class SetDishActiveUseCaseTest {
     }
 
     private static Account owner() {
-        return new Account(OWNER_ID, Role.OWNER);
+        return new Account(OWNER_ID, Role.OWNER, null);
     }
 
     private static Restaurant restaurant() {

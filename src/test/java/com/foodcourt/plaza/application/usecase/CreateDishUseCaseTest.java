@@ -165,7 +165,7 @@ class CreateDishUseCaseTest {
     @EnumSource(value = Role.class, names = {"ADMINISTRATOR", "EMPLOYEE", "CUSTOMER"})
     void createRejectsAnAccountThatIsNotAnOwner(Role role) {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
-        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role)));
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role, null)));
 
         assertThatThrownBy(() -> useCase.create(OWNER, draft("Pasta", 12000, "Cream sauce", "Main")))
                 .isInstanceOf(OwnerRoleRequired.class);
@@ -195,7 +195,7 @@ class CreateDishUseCaseTest {
     }
 
     private static Account owner() {
-        return new Account(OWNER_ID, Role.OWNER);
+        return new Account(OWNER_ID, Role.OWNER, null);
     }
 
     private static Restaurant restaurant() {

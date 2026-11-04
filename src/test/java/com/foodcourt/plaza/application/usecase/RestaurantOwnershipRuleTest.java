@@ -67,7 +67,7 @@ class RestaurantOwnershipRuleTest {
     @Test
     void requireOwnedByReturnsTheRestaurantOfThatOwner() {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
-        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, Role.OWNER)));
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, Role.OWNER, null)));
 
         assertThat(rule.requireOwnedBy(OWNER, RESTAURANT_ID)).isEqualTo(restaurant());
         verify(owners).findById(OWNER_ID);
@@ -110,7 +110,7 @@ class RestaurantOwnershipRuleTest {
     @EnumSource(value = Role.class, names = {"ADMINISTRATOR", "EMPLOYEE", "CUSTOMER"})
     void requireOwnedByRejectsAnAccountThatIsNotAnOwner(Role role) {
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
-        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role)));
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role, null)));
 
         assertThatThrownBy(() -> rule.requireOwnedBy(OWNER, RESTAURANT_ID)).isInstanceOf(OwnerRoleRequired.class);
     }

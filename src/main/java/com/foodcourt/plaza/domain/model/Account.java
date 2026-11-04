@@ -1,5 +1,8 @@
 package com.foodcourt.plaza.domain.model;
 
-/** Account summary read from user-service. Only the id and the role are needed. */
-public record Account(Long id, Role role) {
+/**
+ * Account summary read from user-service.
+ * {@code restaurantId} is set only for an employee. Every other role carries null.
+ */
+public record Account(Long id, Role role, Long restaurantId) {
 }

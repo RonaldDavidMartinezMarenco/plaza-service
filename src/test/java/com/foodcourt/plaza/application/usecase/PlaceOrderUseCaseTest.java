@@ -160,7 +160,7 @@ class PlaceOrderUseCaseTest {
 
     @Test
     void placeRejectsAnAccountThatIsNoLongerACustomer() {
-        when(owners.findById(CUSTOMER_ID)).thenReturn(Optional.of(new Account(CUSTOMER_ID, Role.OWNER)));
+        when(owners.findById(CUSTOMER_ID)).thenReturn(Optional.of(new Account(CUSTOMER_ID, Role.OWNER, null)));
 
         assertThatThrownBy(() -> useCase.place(CUSTOMER, draft(line(1L, 1)))).isInstanceOf(CustomerRoleRequired.class);
         verify(orders, never()).save(any());
@@ -266,7 +266,7 @@ class PlaceOrderUseCaseTest {
     }
 
     private void customerAccount() {
-        when(owners.findById(CUSTOMER_ID)).thenReturn(Optional.of(new Account(CUSTOMER_ID, Role.CUSTOMER)));
+        when(owners.findById(CUSTOMER_ID)).thenReturn(Optional.of(new Account(CUSTOMER_ID, Role.CUSTOMER, null)));
     }
 
     private static PlaceOrderDraft draft(OrderLineDraft... lines) {

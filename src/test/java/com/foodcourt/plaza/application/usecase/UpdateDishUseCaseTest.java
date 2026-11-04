@@ -232,7 +232,7 @@ class UpdateDishUseCaseTest {
     void updateRejectsAnAccountThatIsNotAnOwner(Role role) {
         when(dishes.findById(DISH_ID)).thenReturn(Optional.of(stored(true)));
         when(restaurants.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
-        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role)));
+        when(owners.findById(OWNER_ID)).thenReturn(Optional.of(new Account(OWNER_ID, role, null)));
 
         assertThatThrownBy(() -> useCase.update(OWNER, DISH_ID, new DishUpdate(15000, "Tomato sauce")))
                 .isInstanceOf(OwnerRoleRequired.class);
@@ -252,7 +252,7 @@ class UpdateDishUseCaseTest {
     }
 
     private static Account owner() {
-        return new Account(OWNER_ID, Role.OWNER);
+        return new Account(OWNER_ID, Role.OWNER, null);
     }
 
     private static Restaurant restaurant() {

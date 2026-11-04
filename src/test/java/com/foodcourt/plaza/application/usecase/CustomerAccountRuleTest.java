@@ -38,7 +38,7 @@ class CustomerAccountRuleTest {
 
     @Test
     void requireCustomerAcceptsACustomerAccount() {
-        when(accounts.findById(CUSTOMER_ID)).thenReturn(Optional.of(new Account(CUSTOMER_ID, Role.CUSTOMER)));
+        when(accounts.findById(CUSTOMER_ID)).thenReturn(Optional.of(new Account(CUSTOMER_ID, Role.CUSTOMER, null)));
 
         assertThatCode(() -> rule.requireCustomer(CUSTOMER_ID)).doesNotThrowAnyException();
     }
@@ -53,7 +53,7 @@ class CustomerAccountRuleTest {
     @ParameterizedTest
     @EnumSource(value = Role.class, names = {"ADMINISTRATOR", "OWNER", "EMPLOYEE"})
     void requireCustomerRejectsAnAccountThatIsNotACustomer(Role role) {
-        when(accounts.findById(CUSTOMER_ID)).thenReturn(Optional.of(new Account(CUSTOMER_ID, role)));
+        when(accounts.findById(CUSTOMER_ID)).thenReturn(Optional.of(new Account(CUSTOMER_ID, role, null)));
 
         assertThatThrownBy(() -> rule.requireCustomer(CUSTOMER_ID)).isInstanceOf(CustomerRoleRequired.class);
     }
