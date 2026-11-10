@@ -200,6 +200,21 @@ class OrderRepositoryAdapterTest {
     }
 
     @Test
+    void markReadyIfInPreparationIsTrueWhenOneRowChanges() {
+        when(orders.markReadyIfInPreparation(1L, 1L, 5L, "hash", OrderStatus.IN_PREPARATION, OrderStatus.READY))
+                .thenReturn(1);
+
+        assertThat(adapter.markReadyIfInPreparation(1L, 1L, 5L, "hash")).isTrue();
+    }
+
+    @Test
+    void revertReadyIsFalseWhenTheHashNoLongerMatches() {
+        when(orders.revertReady(1L, 1L, 5L, "hash", OrderStatus.READY, OrderStatus.IN_PREPARATION)).thenReturn(0);
+
+        assertThat(adapter.revertReady(1L, 1L, 5L, "hash")).isFalse();
+    }
+
+    @Test
     void assignIfPendingIsFalseWhenNoRowChanges() {
         when(orders.assignIfPending(1L, 1L, 6L, OrderStatus.PENDING, OrderStatus.IN_PREPARATION)).thenReturn(0);
 

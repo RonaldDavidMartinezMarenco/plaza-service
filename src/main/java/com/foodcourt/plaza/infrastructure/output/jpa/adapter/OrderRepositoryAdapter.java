@@ -91,6 +91,32 @@ public class OrderRepositoryAdapter implements OrderRepository {
         return updated == 1;
     }
 
+    @Override
+    @Transactional
+    public boolean markReadyIfInPreparation(long orderId, long restaurantId, long employeeId, String pinHash) {
+        int updated = orders.markReadyIfInPreparation(
+                orderId,
+                restaurantId,
+                employeeId,
+                pinHash,
+                OrderStatus.IN_PREPARATION,
+                OrderStatus.READY);
+        return updated == 1;
+    }
+
+    @Override
+    @Transactional
+    public boolean revertReady(long orderId, long restaurantId, long employeeId, String pinHash) {
+        int updated = orders.revertReady(
+                orderId,
+                restaurantId,
+                employeeId,
+                pinHash,
+                OrderStatus.READY,
+                OrderStatus.IN_PREPARATION);
+        return updated == 1;
+    }
+
     private static List<Long> ids(Page<CustomerOrderEntity> stored) {
         return stored.getContent().stream().map(CustomerOrderEntity::getId).toList();
     }

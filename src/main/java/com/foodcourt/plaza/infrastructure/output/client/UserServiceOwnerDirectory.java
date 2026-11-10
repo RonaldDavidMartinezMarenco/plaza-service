@@ -3,6 +3,7 @@ package com.foodcourt.plaza.infrastructure.output.client;
 import java.io.IOException;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,7 @@ public final class UserServiceOwnerDirectory implements OwnerDirectory {
 
     private final RestClient userService;
 
-    public UserServiceOwnerDirectory(RestClient userService) {
+    public UserServiceOwnerDirectory(@Qualifier("userServiceClient") RestClient userService) {
         this.userService = userService;
     }
 

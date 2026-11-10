@@ -32,8 +32,12 @@ import com.foodcourt.plaza.domain.exception.InvalidRestaurantName;
 import com.foodcourt.plaza.domain.exception.NitAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.RestaurantNameAlreadyRegistered;
 import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
+import com.foodcourt.plaza.domain.exception.NotificationRejected;
+import com.foodcourt.plaza.domain.exception.NotificationUnavailable;
+import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
 import com.foodcourt.plaza.domain.exception.OrderNotFound;
+import com.foodcourt.plaza.domain.exception.OrderNotReady;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
@@ -207,6 +211,26 @@ public class ApiExceptionHandler {
     @ExceptionHandler(OrderAlreadyAssigned.class)
     ProblemDetail orderAlreadyAssigned(OrderAlreadyAssigned exception, HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "Order already assigned", exception, request);
+    }
+
+    @ExceptionHandler(OrderNotReady.class)
+    ProblemDetail orderNotReady(OrderNotReady exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Order cannot be marked ready", exception, request);
+    }
+
+    @ExceptionHandler(OrderAssignedToAnotherEmployee.class)
+    ProblemDetail assignedToAnother(OrderAssignedToAnotherEmployee exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Order assigned to another employee", exception, request);
+    }
+
+    @ExceptionHandler(NotificationRejected.class)
+    ProblemDetail notificationRejected(NotificationRejected exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_GATEWAY, "Message rejected", exception, request);
+    }
+
+    @ExceptionHandler(NotificationUnavailable.class)
+    ProblemDetail notificationUnavailable(NotificationUnavailable exception, HttpServletRequest request) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Messaging service unavailable", exception, request);
     }
 
     private static ProblemDetail problem(

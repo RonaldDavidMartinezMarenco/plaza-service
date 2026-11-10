@@ -44,10 +44,55 @@ public interface CustomerOrderJpaRepository extends JpaRepository<CustomerOrderE
                and o.status = :pending
                and o.assignedEmployeeId is null
             """)
-    int assignIfPending(
+            int assignIfPending(
             @Param("id") long id,
             @Param("restaurantId") long restaurantId,
             @Param("employeeId") long employeeId,
             @Param("pending") OrderStatus pending,
             @Param("nextStatus") OrderStatus nextStatus);
+
+    /**
+     * Moves a row to ready only while it is still in preparation for this employee and has no PIN.
+     * Returns the number of rows changed. Zero means another request won.
+     */
+    @Modifying
+    @Query("""
+            update CustomerOrderEntity o
+               set o.status = :ready,
+                   o.pinHash = :pinHash
+             where o.id = :id
+               and o.restaurantId = :restaurantId
+               and o.status = :preparing
+               and o.assignedEmployeeId = :employeeId
+               and o.pinHash is null
+            """)
+    int markReadyIfInPreparation(
+            @Param("id") long id,
+            @Param("restaurantId") long restaurantId,
+            @Param("employeeId") long employeeId,
+            @Param("pinHash") String pinHash,
+            @Param("preparing") OrderStatus preparing,
+            @Param("ready") OrderStatus ready);
+
+    /**
+     * Returns a ready row to preparation only when the PIN hash is still the one this request stored.
+     */
+    @Modifying
+    @Query("""
+            update CustomerOrderEntity o
+               set o.status = :preparing,
+                   o.pinHash = null
+             where o.id = :id
+               and o.restaurantId = :restaurantId
+               and o.status = :ready
+               and o.assignedEmployeeId = :employeeId
+               and o.pinHash = :pinHash
+            """)
+    int revertReady(
+            @Param("id") long id,
+            @Param("restaurantId") long restaurantId,
+            @Param("employeeId") long employeeId,
+            @Param("pinHash") String pinHash,
+            @Param("ready") OrderStatus ready,
+            @Param("preparing") OrderStatus preparing);
 }
