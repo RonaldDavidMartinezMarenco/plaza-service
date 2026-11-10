@@ -36,6 +36,7 @@ import com.foodcourt.plaza.domain.exception.NotificationRejected;
 import com.foodcourt.plaza.domain.exception.NotificationUnavailable;
 import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotCancellable;
 import com.foodcourt.plaza.domain.exception.OrderNotDeliverable;
 import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
@@ -228,6 +229,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(OrderNotDeliverable.class)
     ProblemDetail orderNotDeliverable(OrderNotDeliverable exception, HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "Order cannot be delivered", exception, request);
+    }
+
+    @ExceptionHandler(OrderNotCancellable.class)
+    ProblemDetail orderNotCancellable(OrderNotCancellable exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Order cannot be cancelled", exception, request);
     }
 
     @ExceptionHandler(PinDoesNotMatch.class)

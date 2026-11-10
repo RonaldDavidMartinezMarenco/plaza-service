@@ -130,6 +130,23 @@ public class OrderRepositoryAdapter implements OrderRepository {
         return updated == 1;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Order> findByIdAndCustomerId(long orderId, long customerId) {
+        return orders.findByIdAndCustomerId(orderId, customerId).map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional
+    public boolean cancelIfPending(long orderId, long customerId) {
+        int updated = orders.cancelIfPending(
+                orderId,
+                customerId,
+                OrderStatus.PENDING,
+                OrderStatus.CANCELLED);
+        return updated == 1;
+    }
+
     private static List<Long> ids(Page<CustomerOrderEntity> stored) {
         return stored.getContent().stream().map(CustomerOrderEntity::getId).toList();
     }

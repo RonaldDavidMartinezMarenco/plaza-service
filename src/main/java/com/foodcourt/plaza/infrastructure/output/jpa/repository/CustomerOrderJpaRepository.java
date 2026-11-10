@@ -30,6 +30,10 @@ public interface CustomerOrderJpaRepository extends JpaRepository<CustomerOrderE
     @EntityGraph(attributePaths = "lines")
     Optional<CustomerOrderEntity> findByIdAndRestaurantId(long id, long restaurantId);
 
+    /** One order of one customer, with its lines. Another customer looks like a missing id. */
+    @EntityGraph(attributePaths = "lines")
+    Optional<CustomerOrderEntity> findByIdAndCustomerId(long id, long customerId);
+
     /**
      * Claims a row that is still pending and unassigned.
      * Returns the number of rows changed. Zero means another request won.
@@ -117,4 +121,22 @@ public interface CustomerOrderJpaRepository extends JpaRepository<CustomerOrderE
             @Param("pinHash") String pinHash,
             @Param("ready") OrderStatus ready,
             @Param("delivered") OrderStatus delivered);
+
+    /**
+     * Moves a row to cancelled only while it is still pending for this customer.
+     * Returns the number of rows changed. Zero means another request won.
+     */
+    @Modifying
+    @Query("""
+            update CustomerOrderEntity o
+               set o.status = :cancelled
+             where o.id = :id
+               and o.customerId = :customerId
+               and o.status = :pending
+            """)
+    int cancelIfPending(
+            @Param("id") long id,
+            @Param("customerId") long customerId,
+            @Param("pending") OrderStatus pending,
+            @Param("cancelled") OrderStatus cancelled);
 }

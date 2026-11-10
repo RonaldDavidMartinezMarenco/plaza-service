@@ -13,6 +13,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
 import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotCancellable;
 import com.foodcourt.plaza.domain.exception.OrderNotDeliverable;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
 
@@ -176,5 +177,46 @@ class OrderTest {
 
         assertThatThrownBy(() -> order.deliver(5L)).isInstanceOf(OrderNotDeliverable.class);
         assertThat(order.pinHash()).isNull();
+    }
+
+    @Test
+    void cancelMovesAPendingOrderToCancelled() {
+        Order order = new Order(
+                2L, 12L, 1L, OrderStatus.PENDING, null, null, List.of(new OrderLine(1L, 2)));
+
+        Order cancelled = order.cancel();
+
+        assertThat(cancelled.id()).isEqualTo(2L);
+        assertThat(cancelled.customerId()).isEqualTo(12L);
+        assertThat(cancelled.restaurantId()).isEqualTo(1L);
+        assertThat(cancelled.status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(cancelled.assignedEmployeeId()).isNull();
+        assertThat(cancelled.pinHash()).isNull();
+        assertThat(cancelled.lines()).containsExactly(new OrderLine(1L, 2));
+        assertThat(order.status()).isEqualTo(OrderStatus.PENDING);
+    }
+
+    @Test
+    void cancelKeepsTheStoredEmployeeAndPin() {
+        Order order = new Order(2L, 12L, 1L, OrderStatus.PENDING, 5L, "hash", List.of(new OrderLine(1L, 2)));
+
+        Order cancelled = order.cancel();
+
+        assertThat(cancelled.status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(cancelled.assignedEmployeeId()).isEqualTo(5L);
+        assertThat(cancelled.pinHash()).isEqualTo("hash");
+        assertThat(order.status()).isEqualTo(OrderStatus.PENDING);
+        assertThat(order.assignedEmployeeId()).isEqualTo(5L);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = {"IN_PREPARATION", "READY", "DELIVERED", "CANCELLED"})
+    void cancelRejectsAnyStatusOtherThanPending(OrderStatus status) {
+        Order order = new Order(2L, 12L, 1L, status, null, null, List.of(new OrderLine(1L, 2)));
+
+        assertThatThrownBy(order::cancel)
+                .isInstanceOf(OrderNotCancellable.class)
+                .hasMessage("Lo sentimos, tu pedido ya está en preparación y no puede cancelarse");
+        assertThat(order.status()).isEqualTo(status);
     }
 }

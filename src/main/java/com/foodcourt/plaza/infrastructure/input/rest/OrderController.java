@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.foodcourt.plaza.application.handler.AssignOrderHandler;
+import com.foodcourt.plaza.application.handler.CancelOrderHandler;
 import com.foodcourt.plaza.application.handler.DeliverOrderHandler;
 import com.foodcourt.plaza.application.handler.ListRestaurantOrdersHandler;
 import com.foodcourt.plaza.application.handler.MarkOrderReadyHandler;
@@ -44,8 +45,8 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
 /**
- * Places an order for a customer, lists orders for an employee, and lets that employee
- * take one, mark it ready, and deliver it.
+ * Places an order for a customer and lets that customer cancel it while it is pending.
+ * Lists orders for an employee, and lets that employee take one, mark it ready, and deliver it.
  * The class is not final: {@code @Validated} and method security need a CGLIB subclass.
  */
 @RestController
@@ -59,6 +60,7 @@ class OrderController {
     private final AssignOrderHandler assignOrder;
     private final MarkOrderReadyHandler markReady;
     private final DeliverOrderHandler deliverOrder;
+    private final CancelOrderHandler cancelOrder;
     private final OrderRestMapper mapper = new OrderRestMapper();
 
     OrderController(
@@ -66,12 +68,14 @@ class OrderController {
             ListRestaurantOrdersHandler listOrders,
             AssignOrderHandler assignOrder,
             MarkOrderReadyHandler markReady,
-            DeliverOrderHandler deliverOrder) {
+            DeliverOrderHandler deliverOrder,
+            CancelOrderHandler cancelOrder) {
         this.placeOrder = placeOrder;
         this.listOrders = listOrders;
         this.assignOrder = assignOrder;
         this.markReady = markReady;
         this.deliverOrder = deliverOrder;
+        this.cancelOrder = cancelOrder;
     }
 
     @PostMapping("/orders/{orderId}/ready")
@@ -158,6 +162,43 @@ class OrderController {
                             """)))
             @Valid @RequestBody DeliverOrderRequest request) {
         return ResponseEntity.ok(mapper.toResponse(deliverOrder.deliver(orderId, mapper.toPin(request))));
+    }
+
+    @PostMapping("/orders/{orderId}/cancellation")
+    @Operation(
+            summary = "Cancel the customer's pending order",
+            description = "The customer comes from the access token and must own the order. "
+                    + "The order must be PENDING. It becomes CANCELLED. "
+                    + "Any other status is rejected with the backlog sentence. "
+                    + "A second call does not cancel it again. pinHash is omitted.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Order cancelled", content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = OrderResponse.class),
+                    examples = @ExampleObject(name = "Lucía's order cancelled", value = """
+                            {
+                              "id": 2,
+                              "customerId": 12,
+                              "restaurantId": 1,
+                              "status": "CANCELLED",
+                              "assignedEmployeeId": null,
+                              "lines": [
+                                { "dishId": 1, "quantity": 2 }
+                              ]
+                            }
+                            """))),
+            @ApiResponse(responseCode = "400", description = "The order id is not a positive integer"),
+            @ApiResponse(responseCode = "401", description = "Missing or invalid access token"),
+            @ApiResponse(responseCode = "403", description = "The caller is not a customer"),
+            @ApiResponse(responseCode = "404", description = "The order does not exist for this customer, or the customer account does not exist"),
+            @ApiResponse(responseCode = "409", description = "The order is not pending"),
+            @ApiResponse(responseCode = "503", description = "The user service is unavailable")
+    })
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<OrderResponse> cancel(
+            @Parameter(description = "Lucía's pending order at La Parrilla", example = "2")
+            @PathVariable @Positive long orderId) {
+        return ResponseEntity.ok(mapper.toResponse(cancelOrder.cancel(orderId)));
     }
 
     @PostMapping("/orders/{orderId}/assignment")
