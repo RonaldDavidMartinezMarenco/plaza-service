@@ -215,6 +215,21 @@ class OrderRepositoryAdapterTest {
     }
 
     @Test
+    void deliverIfReadyIsTrueOnlyWhenOneReadyRowChanges() {
+        when(orders.deliverIfReady(1L, 1L, 5L, "hash", OrderStatus.READY, OrderStatus.DELIVERED)).thenReturn(1);
+
+        assertThat(adapter.deliverIfReady(1L, 1L, 5L, "hash")).isTrue();
+        verify(orders).deliverIfReady(1L, 1L, 5L, "hash", OrderStatus.READY, OrderStatus.DELIVERED);
+    }
+
+    @Test
+    void deliverIfReadyIsFalseWhenNoRowChanges() {
+        when(orders.deliverIfReady(1L, 1L, 5L, "hash", OrderStatus.READY, OrderStatus.DELIVERED)).thenReturn(0);
+
+        assertThat(adapter.deliverIfReady(1L, 1L, 5L, "hash")).isFalse();
+    }
+
+    @Test
     void assignIfPendingIsFalseWhenNoRowChanges() {
         when(orders.assignIfPending(1L, 1L, 6L, OrderStatus.PENDING, OrderStatus.IN_PREPARATION)).thenReturn(0);
 

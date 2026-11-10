@@ -95,4 +95,26 @@ public interface CustomerOrderJpaRepository extends JpaRepository<CustomerOrderE
             @Param("pinHash") String pinHash,
             @Param("ready") OrderStatus ready,
             @Param("preparing") OrderStatus preparing);
+
+    /**
+     * Moves a row to delivered only while it is still ready for this employee and this PIN hash.
+     * Returns the number of rows changed. Zero means another request won.
+     */
+    @Modifying
+    @Query("""
+            update CustomerOrderEntity o
+               set o.status = :delivered
+             where o.id = :id
+               and o.restaurantId = :restaurantId
+               and o.status = :ready
+               and o.assignedEmployeeId = :employeeId
+               and o.pinHash = :pinHash
+            """)
+    int deliverIfReady(
+            @Param("id") long id,
+            @Param("restaurantId") long restaurantId,
+            @Param("employeeId") long employeeId,
+            @Param("pinHash") String pinHash,
+            @Param("ready") OrderStatus ready,
+            @Param("delivered") OrderStatus delivered);
 }

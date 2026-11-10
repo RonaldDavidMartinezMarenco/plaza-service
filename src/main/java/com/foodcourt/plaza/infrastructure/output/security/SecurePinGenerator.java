@@ -2,13 +2,10 @@ package com.foodcourt.plaza.infrastructure.output.security;
 
 import java.security.SecureRandom;
 
-import org.springframework.stereotype.Service;
-
 import com.foodcourt.plaza.domain.model.SecurityPin;
 import com.foodcourt.plaza.domain.spi.PinGenerator;
 
-/** Draws a six-digit PIN, including leading zeros. */
-@Service
+/** Draws a six-digit PIN, including leading zeros. Created by the PIN generator config. */
 public final class SecurePinGenerator implements PinGenerator {
 
     private final SecureRandom random = new SecureRandom();

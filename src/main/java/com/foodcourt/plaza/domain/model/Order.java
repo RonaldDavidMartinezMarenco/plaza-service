@@ -5,6 +5,7 @@ import java.util.List;
 import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
 import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotDeliverable;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
 
 /**
@@ -12,6 +13,7 @@ import com.foodcourt.plaza.domain.exception.OrderNotReady;
  * {@link #place} always starts at {@link OrderStatus#PENDING}, with no employee and no PIN.
  * {@link #assign} is the only way into {@link OrderStatus#IN_PREPARATION}.
  * {@link #markReady} is the only way into {@link OrderStatus#READY}. {@code pinHash} stays null until {@link #withPin}.
+ * {@link #deliver} is the only way into {@link OrderStatus#DELIVERED}. That status does not change again.
  */
 public record Order(
         Long id,
@@ -66,6 +68,17 @@ public record Order(
         return new Order(id, customerId, restaurantId, status, assignedEmployeeId, pinHash, lines);
     }
 
+    /**
+     * The assigned employee closes a ready order. The hash stays; the clear PIN is not stored.
+     * {@link OrderStatus#DELIVERED} has no further transition.
+     */
+    public Order deliver(long employeeId) {
+        requireReady();
+        requireAssignee(employeeId);
+        requirePinStored();
+        return new Order(id, customerId, restaurantId, OrderStatus.DELIVERED, assignedEmployeeId, pinHash, lines);
+    }
+
     private void requireInPreparation() {
         if (status != OrderStatus.IN_PREPARATION) {
             throw new OrderNotReady(status);
@@ -81,6 +94,18 @@ public record Order(
     private void requireWithoutPin() {
         if (pinHash != null) {
             throw new OrderNotReady(status);
+        }
+    }
+
+    private void requireReady() {
+        if (status != OrderStatus.READY) {
+            throw new OrderNotDeliverable(status);
+        }
+    }
+
+    private void requirePinStored() {
+        if (pinHash == null || pinHash.isBlank()) {
+            throw new OrderNotDeliverable(status);
         }
     }
 }

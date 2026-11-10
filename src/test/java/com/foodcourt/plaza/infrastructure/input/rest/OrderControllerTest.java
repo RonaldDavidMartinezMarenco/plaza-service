@@ -30,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.foodcourt.plaza.application.handler.AssignOrderHandler;
+import com.foodcourt.plaza.application.handler.DeliverOrderHandler;
 import com.foodcourt.plaza.application.handler.ListRestaurantOrdersHandler;
 import com.foodcourt.plaza.application.handler.MarkOrderReadyHandler;
 import com.foodcourt.plaza.application.handler.PlaceOrderHandler;
@@ -46,11 +47,14 @@ import com.foodcourt.plaza.domain.exception.DuplicateOrderLine;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.InvalidOrderStatus;
 import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
+import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotDeliverable;
 import com.foodcourt.plaza.domain.exception.NotificationRejected;
 import com.foodcourt.plaza.domain.exception.NotificationUnavailable;
 import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
+import com.foodcourt.plaza.domain.exception.PinDoesNotMatch;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
@@ -82,6 +86,9 @@ class OrderControllerTest {
 
     @MockitoBean
     private MarkOrderReadyHandler markReady;
+
+    @MockitoBean
+    private DeliverOrderHandler deliverOrder;
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
@@ -546,6 +553,136 @@ class OrderControllerTest {
         assign("/orders/1/ready")
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value(503));
+    }
+
+    @Test
+    void deliverReturnsTheOrderWithoutThePin() throws Exception {
+        when(deliverOrder.deliver(1L, "482913")).thenReturn(new Order(
+                1L, 9L, 1L, OrderStatus.DELIVERED, 5L, "hash", List.of(new OrderLine(1L, 1), new OrderLine(4L, 2))));
+
+        deliver("{\"pin\":\"482913\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DELIVERED"))
+                .andExpect(jsonPath("$.assignedEmployeeId").value(5))
+                .andExpect(jsonPath("$.lines[0].dishId").value(1))
+                .andExpect(jsonPath("$.lines[1].quantity").value(2))
+                .andExpect(jsonPath("$.pin").doesNotExist())
+                .andExpect(jsonPath("$.pinHash").doesNotExist());
+        verify(deliverOrder).deliver(1L, "482913");
+    }
+
+    @Test
+    void deliverKeepsALeadingZeroInThePin() throws Exception {
+        when(deliverOrder.deliver(1L, "048215")).thenReturn(new Order(
+                1L, 9L, 1L, OrderStatus.DELIVERED, 5L, "hash", List.of(new OrderLine(1L, 1))));
+
+        deliver("{\"pin\":\"048215\"}").andExpect(status().isOk());
+        verify(deliverOrder).deliver(1L, "048215");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "",
+            "{}",
+            "{\"pin\":\"\"}",
+            "{\"pin\":\"12345\"}",
+            "{\"pin\":\"1234567\"}",
+            "{\"pin\":\"12345a\"}",
+            "{\"pin\":\" 123456\"}",
+            "{\"pin\":\"482913\",\"status\":\"DELIVERED\"}",
+            "{\"pin\":\"482913\",\"pinHash\":\"hash\"}"
+    })
+    void deliverRejectsAnInvalidBody(String body) throws Exception {
+        deliver(body).andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        verifyNoInteractions(deliverOrder);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/orders/0/delivery", "/orders/-1/delivery", "/orders/abc/delivery"})
+    void deliverRejectsAnInvalidOrderId(String path) throws Exception {
+        mockMvc.perform(post(path).with(employee()).contentType(MediaType.APPLICATION_JSON).content("{\"pin\":\"482913\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        verifyNoInteractions(deliverOrder);
+    }
+
+    @Test
+    void deliverRejectsAMissingToken() throws Exception {
+        mockMvc.perform(post("/orders/1/delivery").contentType(MediaType.APPLICATION_JSON).content("{\"pin\":\"482913\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Authentication is required"));
+        verifyNoInteractions(deliverOrder);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_ADMINISTRATOR", "ROLE_OWNER", "ROLE_CUSTOMER"})
+    void deliverRejectsACallerThatIsNotAnEmployee(String authority) throws Exception {
+        mockMvc.perform(post("/orders/1/delivery")
+                        .with(jwt().authorities(new SimpleGrantedAuthority(authority)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pin\":\"482913\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You do not have permission for this action"));
+        verifyNoInteractions(deliverOrder);
+    }
+
+    @Test
+    void deliverRejectsAnOrderThatCannotChange() throws Exception {
+        when(deliverOrder.deliver(1L, "482913")).thenThrow(new OrderNotDeliverable(OrderStatus.DELIVERED));
+
+        deliver("{\"pin\":\"482913\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Order cannot be delivered"))
+                .andExpect(jsonPath("$.detail").value("The order is DELIVERED and cannot be delivered"))
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    void deliverRejectsAPinThatDoesNotMatch() throws Exception {
+        when(deliverOrder.deliver(1L, "482913")).thenThrow(new PinDoesNotMatch());
+
+        deliver("{\"pin\":\"482913\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Security PIN does not match"))
+                .andExpect(jsonPath("$.detail").value("The security PIN does not match"))
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    void deliverRejectsAnEmployeeWhoIsNotAssigned() throws Exception {
+        when(deliverOrder.deliver(1L, "482913")).thenThrow(new OrderAssignedToAnotherEmployee());
+
+        deliver("{\"pin\":\"482913\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Order assigned to another employee"))
+                .andExpect(jsonPath("$.detail").value("The order is assigned to another employee"));
+    }
+
+    @Test
+    void deliverRejectsAMissingOrder() throws Exception {
+        when(deliverOrder.deliver(1L, "482913")).thenThrow(new OrderNotFound());
+
+        deliver("{\"pin\":\"482913\"}")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Order not found"))
+                .andExpect(jsonPath("$.detail").value("No order exists for this id"));
+    }
+
+    @Test
+    void deliverRejectsWhenTheUserServiceIsDown() throws Exception {
+        when(deliverOrder.deliver(1L, "482913")).thenThrow(new OwnerDirectoryUnavailable());
+
+        deliver("{\"pin\":\"482913\"}")
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.title").value("User service unavailable"))
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
+    private ResultActions deliver(String body) throws Exception {
+        return mockMvc.perform(post("/orders/1/delivery")
+                .with(employee())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
     }
 
     private ResultActions assign(String path) throws Exception {

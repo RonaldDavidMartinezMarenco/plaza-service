@@ -8,10 +8,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
 import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotDeliverable;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
 
 class OrderTest {
@@ -110,5 +112,69 @@ class OrderTest {
         Order order = new Order(1L, 9L, 1L, OrderStatus.IN_PREPARATION, 6L, null, List.of(new OrderLine(1L, 1)));
 
         assertThatThrownBy(() -> order.markReady(5L)).isInstanceOf(OrderAssignedToAnotherEmployee.class);
+    }
+
+    @Test
+    void deliverMovesAReadyOrderToDeliveredAndKeepsThePin() {
+        List<OrderLine> lines = List.of(new OrderLine(1L, 1), new OrderLine(4L, 2));
+        Order order = new Order(1L, 9L, 1L, OrderStatus.READY, 5L, "hash", lines);
+
+        Order delivered = order.deliver(5L);
+
+        assertThat(delivered.id()).isEqualTo(1L);
+        assertThat(delivered.customerId()).isEqualTo(9L);
+        assertThat(delivered.restaurantId()).isEqualTo(1L);
+        assertThat(delivered.status()).isEqualTo(OrderStatus.DELIVERED);
+        assertThat(delivered.assignedEmployeeId()).isEqualTo(5L);
+        assertThat(delivered.pinHash()).isEqualTo("hash");
+        assertThat(delivered.lines()).containsExactlyElementsOf(lines);
+        assertThat(order.status()).isEqualTo(OrderStatus.READY);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = {"PENDING", "IN_PREPARATION", "DELIVERED", "CANCELLED"})
+    void deliverRejectsAnyStatusOtherThanReady(OrderStatus status) {
+        Order order = new Order(1L, 9L, 1L, status, 5L, "hash", List.of(new OrderLine(1L, 1)));
+
+        assertThatThrownBy(() -> order.deliver(5L))
+                .isInstanceOf(OrderNotDeliverable.class)
+                .hasMessage("The order is " + status + " and cannot be delivered");
+        assertThat(order.status()).isEqualTo(status);
+    }
+
+    @Test
+    void deliverRejectsAnotherEmployee() {
+        Order order = new Order(1L, 9L, 1L, OrderStatus.READY, 6L, "hash", List.of(new OrderLine(1L, 1)));
+
+        assertThatThrownBy(() -> order.deliver(5L))
+                .isInstanceOf(OrderAssignedToAnotherEmployee.class)
+                .hasMessage("The order is assigned to another employee");
+        assertThat(order.status()).isEqualTo(OrderStatus.READY);
+    }
+
+    @Test
+    void deliverRejectsAnOrderWithoutAnAssignee() {
+        Order order = new Order(1L, 9L, 1L, OrderStatus.READY, null, "hash", List.of(new OrderLine(1L, 1)));
+
+        assertThatThrownBy(() -> order.deliver(5L)).isInstanceOf(OrderAssignedToAnotherEmployee.class);
+        assertThat(order.assignedEmployeeId()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void deliverRejectsAReadyOrderWithoutAStoredPin(String pinHash) {
+        Order order = new Order(1L, 9L, 1L, OrderStatus.READY, 5L, pinHash, List.of(new OrderLine(1L, 1)));
+
+        assertThatThrownBy(() -> order.deliver(5L))
+                .isInstanceOf(OrderNotDeliverable.class)
+                .hasMessage("The order is READY and cannot be delivered");
+    }
+
+    @Test
+    void deliverRejectsAReadyOrderWhosePinHashIsNull() {
+        Order order = new Order(1L, 9L, 1L, OrderStatus.READY, 5L, null, List.of(new OrderLine(1L, 1)));
+
+        assertThatThrownBy(() -> order.deliver(5L)).isInstanceOf(OrderNotDeliverable.class);
+        assertThat(order.pinHash()).isNull();
     }
 }

@@ -19,4 +19,9 @@ public final class BcryptPinHasher implements PinHasher {
     public String hash(String pin) {
         return encoder.encode(pin);
     }
+
+    @Override
+    public boolean matches(String pin, String hash) {
+        return encoder.matches(pin, hash);
+    }
 }
