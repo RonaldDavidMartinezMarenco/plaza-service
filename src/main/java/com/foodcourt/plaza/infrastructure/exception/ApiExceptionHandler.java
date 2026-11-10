@@ -36,8 +36,10 @@ import com.foodcourt.plaza.domain.exception.NotificationRejected;
 import com.foodcourt.plaza.domain.exception.NotificationUnavailable;
 import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotDeliverable;
 import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
+import com.foodcourt.plaza.domain.exception.PinDoesNotMatch;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
@@ -221,6 +223,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(OrderAssignedToAnotherEmployee.class)
     ProblemDetail assignedToAnother(OrderAssignedToAnotherEmployee exception, HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "Order assigned to another employee", exception, request);
+    }
+
+    @ExceptionHandler(OrderNotDeliverable.class)
+    ProblemDetail orderNotDeliverable(OrderNotDeliverable exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Order cannot be delivered", exception, request);
+    }
+
+    @ExceptionHandler(PinDoesNotMatch.class)
+    ProblemDetail pinDoesNotMatch(PinDoesNotMatch exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Security PIN does not match", exception, request);
     }
 
     @ExceptionHandler(NotificationRejected.class)

@@ -10,6 +10,7 @@ import com.foodcourt.plaza.domain.model.PageQuery;
 import com.foodcourt.plaza.domain.model.PageResult;
 import com.foodcourt.plaza.domain.model.PlaceOrderDraft;
 import com.foodcourt.plaza.domain.model.PlaceOrderDraft.OrderLineDraft;
+import com.foodcourt.plaza.infrastructure.input.rest.dto.DeliverOrderRequest;
 import com.foodcourt.plaza.infrastructure.input.rest.dto.OrderLineRequest;
 import com.foodcourt.plaza.infrastructure.input.rest.dto.OrderLineResponse;
 import com.foodcourt.plaza.infrastructure.input.rest.dto.OrderResponse;
@@ -21,6 +22,10 @@ public final class OrderRestMapper {
 
     public PlaceOrderDraft toDraft(PlaceOrderRequest request) {
         return new PlaceOrderDraft(request.restaurantId(), lines(request.lines()));
+    }
+
+    public String toPin(DeliverOrderRequest request) {
+        return request.pin();
     }
 
     public OrderListQuery toListQuery(OrderStatus status, int page, int size) {

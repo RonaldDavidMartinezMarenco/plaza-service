@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.foodcourt.plaza.application.handler.AssignOrderHandler;
+import com.foodcourt.plaza.application.handler.DeliverOrderHandler;
 import com.foodcourt.plaza.application.handler.ListRestaurantOrdersHandler;
 import com.foodcourt.plaza.application.handler.MarkOrderReadyHandler;
 import com.foodcourt.plaza.application.handler.PlaceOrderHandler;
@@ -20,6 +21,7 @@ import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderStatus;
 import com.foodcourt.plaza.domain.model.PageQuery;
 import com.foodcourt.plaza.domain.model.PageResult;
+import com.foodcourt.plaza.infrastructure.input.rest.dto.DeliverOrderRequest;
 import com.foodcourt.plaza.infrastructure.input.rest.dto.OrderResponse;
 import com.foodcourt.plaza.infrastructure.input.rest.dto.PageResponse;
 import com.foodcourt.plaza.infrastructure.input.rest.dto.PlaceOrderRequest;
@@ -42,7 +44,8 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
 /**
- * Places an order for a customer, lists orders for an employee, and lets that employee take one.
+ * Places an order for a customer, lists orders for an employee, and lets that employee
+ * take one, mark it ready, and deliver it.
  * The class is not final: {@code @Validated} and method security need a CGLIB subclass.
  */
 @RestController
@@ -55,17 +58,20 @@ class OrderController {
     private final ListRestaurantOrdersHandler listOrders;
     private final AssignOrderHandler assignOrder;
     private final MarkOrderReadyHandler markReady;
+    private final DeliverOrderHandler deliverOrder;
     private final OrderRestMapper mapper = new OrderRestMapper();
 
     OrderController(
             PlaceOrderHandler placeOrder,
             ListRestaurantOrdersHandler listOrders,
             AssignOrderHandler assignOrder,
-            MarkOrderReadyHandler markReady) {
+            MarkOrderReadyHandler markReady,
+            DeliverOrderHandler deliverOrder) {
         this.placeOrder = placeOrder;
         this.listOrders = listOrders;
         this.assignOrder = assignOrder;
         this.markReady = markReady;
+        this.deliverOrder = deliverOrder;
     }
 
     @PostMapping("/orders/{orderId}/ready")
@@ -105,6 +111,53 @@ class OrderController {
             @Parameter(description = "Ronald's order at La Parrilla after Pedro takes it", example = "1")
             @PathVariable @Positive long orderId) {
         return ResponseEntity.ok(mapper.toResponse(markReady.markReady(orderId)));
+    }
+
+    @PostMapping("/orders/{orderId}/delivery")
+    @Operation(
+            summary = "Deliver the order",
+            description = "The employee comes from the access token and must be the one assigned to the order. "
+                    + "The order must be READY. The body carries the six-digit security PIN as a string. "
+                    + "A matching PIN makes the order DELIVERED. pin and pinHash are omitted. "
+                    + "DELIVERED does not change again. The example PIN is not a live PIN.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Order delivered", content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = OrderResponse.class),
+                    examples = @ExampleObject(name = "Ronald's order delivered by Pedro", value = """
+                            {
+                              "id": 1,
+                              "customerId": 9,
+                              "restaurantId": 1,
+                              "status": "DELIVERED",
+                              "assignedEmployeeId": 5,
+                              "lines": [
+                                { "dishId": 1, "quantity": 1 },
+                                { "dishId": 4, "quantity": 2 }
+                              ]
+                            }
+                            """))),
+            @ApiResponse(responseCode = "400", description = "The order id or the PIN is invalid"),
+            @ApiResponse(responseCode = "401", description = "Missing or invalid access token"),
+            @ApiResponse(responseCode = "403", description = "The caller is not an employee of a restaurant"),
+            @ApiResponse(responseCode = "404", description = "The order, the employee, or the restaurant does not exist"),
+            @ApiResponse(responseCode = "409", description = "The order is not ready for this employee, or the PIN does not match"),
+            @ApiResponse(responseCode = "503", description = "The user service is unavailable")
+    })
+    @PreAuthorize("hasRole('EMPLOYEE')")
+    public ResponseEntity<OrderResponse> deliver(
+            @Parameter(description = "Ronald's order at La Parrilla after Pedro marks it ready", example = "1")
+            @PathVariable @Positive long orderId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = DeliverOrderRequest.class),
+                    examples = @ExampleObject(name = "Illustrative PIN", value = """
+                            {
+                              "pin": "482913"
+                            }
+                            """)))
+            @Valid @RequestBody DeliverOrderRequest request) {
+        return ResponseEntity.ok(mapper.toResponse(deliverOrder.deliver(orderId, mapper.toPin(request))));
     }
 
     @PostMapping("/orders/{orderId}/assignment")

@@ -117,6 +117,19 @@ public class OrderRepositoryAdapter implements OrderRepository {
         return updated == 1;
     }
 
+    @Override
+    @Transactional
+    public boolean deliverIfReady(long orderId, long restaurantId, long employeeId, String pinHash) {
+        int updated = orders.deliverIfReady(
+                orderId,
+                restaurantId,
+                employeeId,
+                pinHash,
+                OrderStatus.READY,
+                OrderStatus.DELIVERED);
+        return updated == 1;
+    }
+
     private static List<Long> ids(Page<CustomerOrderEntity> stored) {
         return stored.getContent().stream().map(CustomerOrderEntity::getId).toList();
     }
