@@ -30,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.foodcourt.plaza.application.handler.AssignOrderHandler;
+import com.foodcourt.plaza.application.handler.CancelOrderHandler;
 import com.foodcourt.plaza.application.handler.DeliverOrderHandler;
 import com.foodcourt.plaza.application.handler.ListRestaurantOrdersHandler;
 import com.foodcourt.plaza.application.handler.MarkOrderReadyHandler;
@@ -49,6 +50,7 @@ import com.foodcourt.plaza.domain.exception.InvalidOrderStatus;
 import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
 import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotCancellable;
 import com.foodcourt.plaza.domain.exception.OrderNotDeliverable;
 import com.foodcourt.plaza.domain.exception.NotificationRejected;
 import com.foodcourt.plaza.domain.exception.NotificationUnavailable;
@@ -89,6 +91,9 @@ class OrderControllerTest {
 
     @MockitoBean
     private DeliverOrderHandler deliverOrder;
+
+    @MockitoBean
+    private CancelOrderHandler cancelOrder;
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
@@ -676,6 +681,116 @@ class OrderControllerTest {
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.title").value("User service unavailable"))
                 .andExpect(jsonPath("$.status").value(503));
+    }
+
+    @Test
+    void cancelReturnsTheOrderWithoutThePin() throws Exception {
+        when(cancelOrder.cancel(2L)).thenReturn(new Order(
+                2L, 12L, 1L, OrderStatus.CANCELLED, null, null, List.of(new OrderLine(1L, 2))));
+
+        cancel("/orders/2/cancellation")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(2))
+                .andExpect(jsonPath("$.customerId").value(12))
+                .andExpect(jsonPath("$.restaurantId").value(1))
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.assignedEmployeeId").value(nullValue()))
+                .andExpect(jsonPath("$.lines[0].dishId").value(1))
+                .andExpect(jsonPath("$.lines[0].quantity").value(2))
+                .andExpect(jsonPath("$.pin").doesNotExist())
+                .andExpect(jsonPath("$.pinHash").doesNotExist());
+        verify(cancelOrder).cancel(2L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/orders/0/cancellation", "/orders/-1/cancellation", "/orders/abc/cancellation"})
+    void cancelRejectsAnInvalidOrderId(String path) throws Exception {
+        cancel(path).andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        verifyNoInteractions(cancelOrder);
+    }
+
+    @Test
+    void cancelRejectsAMissingToken() throws Exception {
+        mockMvc.perform(post("/orders/2/cancellation"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Authentication is required"));
+        verifyNoInteractions(cancelOrder);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_ADMINISTRATOR", "ROLE_OWNER", "ROLE_EMPLOYEE"})
+    void cancelRejectsACallerThatIsNotACustomer(String authority) throws Exception {
+        mockMvc.perform(post("/orders/2/cancellation")
+                        .with(jwt().authorities(new SimpleGrantedAuthority(authority))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You do not have permission for this action"));
+        verifyNoInteractions(cancelOrder);
+    }
+
+    @Test
+    void cancelRejectsAMissingOrder() throws Exception {
+        when(cancelOrder.cancel(2L)).thenThrow(new OrderNotFound());
+
+        cancel("/orders/2/cancellation")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Order not found"))
+                .andExpect(jsonPath("$.detail").value("No order exists for this id"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void cancelRejectsAMissingCustomer() throws Exception {
+        when(cancelOrder.cancel(2L)).thenThrow(new CustomerNotFound());
+
+        cancel("/orders/2/cancellation")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Customer not found"))
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void cancelRejectsAnAccountThatIsNotACustomer() throws Exception {
+        when(cancelOrder.cancel(2L)).thenThrow(new CustomerRoleRequired());
+
+        cancel("/orders/2/cancellation")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Customer role required"))
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void cancelRejectsAnOrderThatIsNotPending() throws Exception {
+        when(cancelOrder.cancel(2L)).thenThrow(new OrderNotCancellable());
+
+        cancel("/orders/2/cancellation")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Order cannot be cancelled"))
+                .andExpect(jsonPath("$.detail").value(
+                        "Lo sentimos, tu pedido ya está en preparación y no puede cancelarse"))
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    void cancelReportsAnUpdateThatChangedNothing() throws Exception {
+        when(cancelOrder.cancel(2L)).thenThrow(OrderNotCancellable.unchanged());
+
+        cancel("/orders/2/cancellation")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("The order could not be cancelled"));
+    }
+
+    @Test
+    void cancelRejectsWhenTheUserServiceIsDown() throws Exception {
+        when(cancelOrder.cancel(2L)).thenThrow(new OwnerDirectoryUnavailable());
+
+        cancel("/orders/2/cancellation")
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.title").value("User service unavailable"))
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
+    private ResultActions cancel(String path) throws Exception {
+        return mockMvc.perform(post(path).with(customer()));
     }
 
     private ResultActions deliver(String body) throws Exception {

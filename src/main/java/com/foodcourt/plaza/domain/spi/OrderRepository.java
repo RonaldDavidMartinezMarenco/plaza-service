@@ -15,6 +15,8 @@ import com.foodcourt.plaza.domain.model.PageResult;
  * {@link #markReadyIfInPreparation} writes {@code READY} and the PIN hash only for the assigned employee.
  * {@link #revertReady} clears that hash and returns the row to {@code IN_PREPARATION} when the SMS is rejected.
  * {@link #deliverIfReady} writes {@code DELIVERED} only while the row is still ready for that employee and hash.
+ * {@link #findByIdAndCustomerId} hides an order that belongs to another customer.
+ * {@link #cancelIfPending} writes {@code CANCELLED} only while the row is still pending for that customer.
  */
 public interface OrderRepository {
 
@@ -33,4 +35,8 @@ public interface OrderRepository {
     boolean revertReady(long orderId, long restaurantId, long employeeId, String pinHash);
 
     boolean deliverIfReady(long orderId, long restaurantId, long employeeId, String pinHash);
+
+    Optional<Order> findByIdAndCustomerId(long orderId, long customerId);
+
+    boolean cancelIfPending(long orderId, long customerId);
 }

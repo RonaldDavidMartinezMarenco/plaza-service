@@ -236,6 +236,38 @@ class OrderRepositoryAdapterTest {
         assertThat(adapter.assignIfPending(1L, 1L, 6L)).isFalse();
     }
 
+    @Test
+    void findByIdAndCustomerIdLoadsTheLines() {
+        when(orders.findByIdAndCustomerId(2L, 12L)).thenReturn(Optional.of(order(4L, 1L)));
+
+        Optional<Order> found = adapter.findByIdAndCustomerId(2L, 12L);
+
+        assertThat(found).isPresent();
+        assertThat(found.orElseThrow().lines()).containsExactly(new OrderLine(1L, 1));
+    }
+
+    @Test
+    void findByIdAndCustomerIdIsEmptyWhenTheRowIsMissing() {
+        when(orders.findByIdAndCustomerId(2L, 9L)).thenReturn(Optional.empty());
+
+        assertThat(adapter.findByIdAndCustomerId(2L, 9L)).isEmpty();
+    }
+
+    @Test
+    void cancelIfPendingIsTrueWhenOneRowChanges() {
+        when(orders.cancelIfPending(2L, 12L, OrderStatus.PENDING, OrderStatus.CANCELLED)).thenReturn(1);
+
+        assertThat(adapter.cancelIfPending(2L, 12L)).isTrue();
+        verify(orders).cancelIfPending(2L, 12L, OrderStatus.PENDING, OrderStatus.CANCELLED);
+    }
+
+    @Test
+    void cancelIfPendingIsFalseWhenNoRowChanges() {
+        when(orders.cancelIfPending(2L, 12L, OrderStatus.PENDING, OrderStatus.CANCELLED)).thenReturn(0);
+
+        assertThat(adapter.cancelIfPending(2L, 12L)).isFalse();
+    }
+
     private static CustomerOrderEntity order(long id, long dishId) {
         CustomerOrderEntity entity = new CustomerOrderEntity(id, CUSTOMER_ID, 1L, OrderStatus.PENDING, null, "hash");
         entity.addLine(new OrderLineEntity(id, dishId, 1));

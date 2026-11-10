@@ -5,6 +5,7 @@ import java.util.List;
 import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
 import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotCancellable;
 import com.foodcourt.plaza.domain.exception.OrderNotDeliverable;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
 
@@ -14,6 +15,7 @@ import com.foodcourt.plaza.domain.exception.OrderNotReady;
  * {@link #assign} is the only way into {@link OrderStatus#IN_PREPARATION}.
  * {@link #markReady} is the only way into {@link OrderStatus#READY}. {@code pinHash} stays null until {@link #withPin}.
  * {@link #deliver} is the only way into {@link OrderStatus#DELIVERED}. That status does not change again.
+ * {@link #cancel} is the only way into {@link OrderStatus#CANCELLED}, and only from {@link OrderStatus#PENDING}.
  */
 public record Order(
         Long id,
@@ -106,6 +108,20 @@ public record Order(
     private void requirePinStored() {
         if (pinHash == null || pinHash.isBlank()) {
             throw new OrderNotDeliverable(status);
+        }
+    }
+
+    /**
+     * The customer withdraws this pending order. Restaurant, lines, employee, and PIN stay as stored.
+     */
+    public Order cancel() {
+        requireCancellable();
+        return new Order(id, customerId, restaurantId, OrderStatus.CANCELLED, assignedEmployeeId, pinHash, lines);
+    }
+
+    private void requireCancellable() {
+        if (status != OrderStatus.PENDING) {
+            throw new OrderNotCancellable();
         }
     }
 }
