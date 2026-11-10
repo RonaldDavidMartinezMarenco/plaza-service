@@ -17,6 +17,7 @@ import com.foodcourt.plaza.domain.model.PageResult;
  * {@link #deliverIfReady} writes {@code DELIVERED} only while the row is still ready for that employee and hash.
  * {@link #findByIdAndCustomerId} hides an order that belongs to another customer.
  * {@link #cancelIfPending} writes {@code CANCELLED} only while the row is still pending for that customer.
+ * The revert methods undo one of those writes when the trace was not stored.
  */
 public interface OrderRepository {
 
@@ -39,4 +40,12 @@ public interface OrderRepository {
     Optional<Order> findByIdAndCustomerId(long orderId, long customerId);
 
     boolean cancelIfPending(long orderId, long customerId);
+
+    boolean deleteIfPending(long orderId, long customerId);
+
+    boolean releaseIfInPreparation(long orderId, long restaurantId, long employeeId);
+
+    boolean revertDelivered(long orderId, long restaurantId, long employeeId, String pinHash);
+
+    boolean revertCancellation(long orderId, long customerId);
 }

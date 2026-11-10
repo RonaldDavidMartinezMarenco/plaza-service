@@ -41,6 +41,8 @@ import com.foodcourt.plaza.domain.exception.OrderNotDeliverable;
 import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
 import com.foodcourt.plaza.domain.exception.PinDoesNotMatch;
+import com.foodcourt.plaza.domain.exception.TraceabilityRejected;
+import com.foodcourt.plaza.domain.exception.TraceabilityUnavailable;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.OwnerNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerRoleRequired;
@@ -249,6 +251,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(NotificationUnavailable.class)
     ProblemDetail notificationUnavailable(NotificationUnavailable exception, HttpServletRequest request) {
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "Messaging service unavailable", exception, request);
+    }
+
+    @ExceptionHandler(TraceabilityRejected.class)
+    ProblemDetail traceabilityRejected(TraceabilityRejected exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Trace rejected", exception, request);
+    }
+
+    @ExceptionHandler(TraceabilityUnavailable.class)
+    ProblemDetail traceabilityUnavailable(TraceabilityUnavailable exception, HttpServletRequest request) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Traceability service unavailable", exception, request);
     }
 
     private static ProblemDetail problem(

@@ -2,6 +2,7 @@ package com.foodcourt.plaza.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,13 +26,16 @@ import com.foodcourt.plaza.domain.exception.CustomerRoleRequired;
 import com.foodcourt.plaza.domain.exception.OrderNotCancellable;
 import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
+import com.foodcourt.plaza.domain.exception.TraceabilityUnavailable;
 import com.foodcourt.plaza.domain.model.Account;
 import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.OrderStatusChange;
 import com.foodcourt.plaza.domain.model.Role;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
+import com.foodcourt.plaza.domain.spi.OrderTraceRecorder;
 import com.foodcourt.plaza.domain.spi.OwnerDirectory;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,11 +53,14 @@ class CancelOrderUseCaseTest {
     @Mock
     private OwnerDirectory owners;
 
+    @Mock
+    private OrderTraceRecorder traces;
+
     private CancelOrderUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new CancelOrderUseCase(orders, owners);
+        useCase = new CancelOrderUseCase(orders, owners, traces);
     }
 
     @Test
@@ -182,6 +190,34 @@ class CancelOrderUseCaseTest {
     void cancelDoesNotUseAnEmployeeCaller() {
         assertThatThrownBy(() -> useCase.cancel(PEDRO, 2L)).isInstanceOf(AccessDenied.class);
         verifyNoInteractions(orders);
+    }
+
+    @Test
+    void cancelRecordsTheChangeAndRestoresPendingWhenTheTraceIsUnavailable() {
+        customer(LUCIA);
+        when(orders.findByIdAndCustomerId(2L, LUCIA.id())).thenReturn(Optional.of(pending()));
+        when(orders.cancelIfPending(2L, LUCIA.id())).thenReturn(true);
+        when(orders.revertCancellation(2L, LUCIA.id())).thenReturn(true);
+        org.mockito.Mockito.doThrow(new TraceabilityUnavailable()).when(traces).record(any(OrderStatusChange.class));
+
+        assertThatThrownBy(() -> useCase.cancel(LUCIA, 2L)).isInstanceOf(TraceabilityUnavailable.class);
+        verify(orders).revertCancellation(2L, LUCIA.id());
+    }
+
+    @Test
+    void cancelRecordsPendingToCancelledWithoutAnEmployee() {
+        customer(LUCIA);
+        when(orders.findByIdAndCustomerId(2L, LUCIA.id())).thenReturn(Optional.of(pending()));
+        when(orders.cancelIfPending(2L, LUCIA.id())).thenReturn(true);
+
+        useCase.cancel(LUCIA, 2L);
+
+        ArgumentCaptor<OrderStatusChange> recorded = ArgumentCaptor.forClass(OrderStatusChange.class);
+        verify(traces).record(recorded.capture());
+        assertThat(recorded.getValue().previousStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(recorded.getValue().newStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(recorded.getValue().employeeId()).isNull();
+        assertThat(recorded.getValue().customerId()).isEqualTo(LUCIA.id());
     }
 
     private void customer(Caller caller) {

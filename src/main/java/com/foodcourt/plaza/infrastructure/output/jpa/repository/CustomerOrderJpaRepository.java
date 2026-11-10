@@ -139,4 +139,65 @@ public interface CustomerOrderJpaRepository extends JpaRepository<CustomerOrderE
             @Param("customerId") long customerId,
             @Param("pending") OrderStatus pending,
             @Param("cancelled") OrderStatus cancelled);
+
+    /**
+     * Returns an assigned row to pending only while that employee still holds it.
+     * Returns the number of rows changed.
+     */
+    @Modifying
+    @Query("""
+            update CustomerOrderEntity o
+               set o.status = :pending,
+                   o.assignedEmployeeId = null
+             where o.id = :id
+               and o.restaurantId = :restaurantId
+               and o.status = :preparing
+               and o.assignedEmployeeId = :employeeId
+            """)
+    int releaseIfInPreparation(
+            @Param("id") long id,
+            @Param("restaurantId") long restaurantId,
+            @Param("employeeId") long employeeId,
+            @Param("preparing") OrderStatus preparing,
+            @Param("pending") OrderStatus pending);
+
+    /**
+     * Returns a delivered row to ready only while this employee and PIN hash still match.
+     * Returns the number of rows changed.
+     */
+    @Modifying
+    @Query("""
+            update CustomerOrderEntity o
+               set o.status = :ready
+             where o.id = :id
+               and o.restaurantId = :restaurantId
+               and o.status = :delivered
+               and o.assignedEmployeeId = :employeeId
+               and o.pinHash = :pinHash
+            """)
+    int revertDelivered(
+            @Param("id") long id,
+            @Param("restaurantId") long restaurantId,
+            @Param("employeeId") long employeeId,
+            @Param("pinHash") String pinHash,
+            @Param("delivered") OrderStatus delivered,
+            @Param("ready") OrderStatus ready);
+
+    /**
+     * Returns a cancelled row to pending only while it still belongs to this customer.
+     * Returns the number of rows changed.
+     */
+    @Modifying
+    @Query("""
+            update CustomerOrderEntity o
+               set o.status = :pending
+             where o.id = :id
+               and o.customerId = :customerId
+               and o.status = :cancelled
+            """)
+    int revertCancellation(
+            @Param("id") long id,
+            @Param("customerId") long customerId,
+            @Param("cancelled") OrderStatus cancelled,
+            @Param("pending") OrderStatus pending);
 }

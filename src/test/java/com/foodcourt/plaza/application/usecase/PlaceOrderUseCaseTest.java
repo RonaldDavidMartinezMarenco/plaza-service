@@ -34,18 +34,22 @@ import com.foodcourt.plaza.domain.exception.EmptyOrder;
 import com.foodcourt.plaza.domain.exception.InvalidOrderQuantity;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
+import com.foodcourt.plaza.domain.exception.TraceabilityRejected;
+import com.foodcourt.plaza.domain.exception.TraceabilityUnavailable;
 import com.foodcourt.plaza.domain.model.Account;
 import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Dish;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.OrderStatusChange;
 import com.foodcourt.plaza.domain.model.PlaceOrderDraft;
 import com.foodcourt.plaza.domain.model.PlaceOrderDraft.OrderLineDraft;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.domain.model.Role;
 import com.foodcourt.plaza.domain.spi.DishRepository;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
+import com.foodcourt.plaza.domain.spi.OrderTraceRecorder;
 import com.foodcourt.plaza.domain.spi.OwnerDirectory;
 import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 
@@ -68,11 +72,14 @@ class PlaceOrderUseCaseTest {
     @Mock
     private OwnerDirectory owners;
 
+    @Mock
+    private OrderTraceRecorder traces;
+
     private PlaceOrderUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new PlaceOrderUseCase(orders, restaurants, dishes, owners);
+        useCase = new PlaceOrderUseCase(orders, restaurants, dishes, owners, traces);
     }
 
     @Test
@@ -252,6 +259,49 @@ class PlaceOrderUseCaseTest {
         assertThat(placed.status()).isEqualTo(OrderStatus.PENDING);
         assertThat(OrderStatus.inProgress()).doesNotContain(status);
         verify(orders).save(any(Order.class));
+    }
+
+    @Test
+    void placeRecordsTheOpeningAndDeletesTheOrderWhenTheTraceIsRejected() {
+        prepareOneDish();
+        when(orders.hasActive(CUSTOMER_ID)).thenReturn(false);
+        when(orders.save(any(Order.class))).thenAnswer(invocation -> withId(invocation.getArgument(0), 7L));
+        when(orders.deleteIfPending(7L, CUSTOMER_ID)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new TraceabilityRejected()).when(traces).record(any(OrderStatusChange.class));
+
+        assertThatThrownBy(() -> useCase.place(CUSTOMER, draft(line(1L, 1))))
+                .isInstanceOf(TraceabilityRejected.class);
+        verify(orders).deleteIfPending(7L, CUSTOMER_ID);
+    }
+
+    @Test
+    void placeRecordsPendingWithoutAnEmployee() {
+        prepareOneDish();
+        when(orders.hasActive(CUSTOMER_ID)).thenReturn(false);
+        when(orders.save(any(Order.class))).thenAnswer(invocation -> withId(invocation.getArgument(0), 7L));
+
+        useCase.place(CUSTOMER, draft(line(1L, 1)));
+
+        ArgumentCaptor<OrderStatusChange> recorded = ArgumentCaptor.forClass(OrderStatusChange.class);
+        verify(traces).record(recorded.capture());
+        assertThat(recorded.getValue().orderId()).isEqualTo(7L);
+        assertThat(recorded.getValue().customerId()).isEqualTo(CUSTOMER_ID);
+        assertThat(recorded.getValue().previousStatus()).isNull();
+        assertThat(recorded.getValue().newStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(recorded.getValue().employeeId()).isNull();
+    }
+
+    @Test
+    void placeReportsTraceabilityAsUnavailableAfterDeletingTheOrder() {
+        prepareOneDish();
+        when(orders.hasActive(CUSTOMER_ID)).thenReturn(false);
+        when(orders.save(any(Order.class))).thenAnswer(invocation -> withId(invocation.getArgument(0), 7L));
+        when(orders.deleteIfPending(7L, CUSTOMER_ID)).thenReturn(false);
+        org.mockito.Mockito.doThrow(new TraceabilityUnavailable()).when(traces).record(any(OrderStatusChange.class));
+
+        assertThatThrownBy(() -> useCase.place(CUSTOMER, draft(line(1L, 1))))
+                .isInstanceOf(TraceabilityUnavailable.class);
+        verify(orders).deleteIfPending(7L, CUSTOMER_ID);
     }
 
     private void readyMenu() {

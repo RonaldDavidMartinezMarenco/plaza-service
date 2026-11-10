@@ -26,6 +26,11 @@ public class RestClientConfig {
         return client(clients.messagingServiceUrl(), bearerTokenRelay, MESSAGING_READ_TIMEOUT);
     }
 
+    @Bean
+    RestClient traceabilityServiceClient(ServiceClientsProperties clients, BearerTokenRelay bearerTokenRelay) {
+        return client(clients.traceabilityServiceUrl(), bearerTokenRelay, READ_TIMEOUT);
+    }
+
     private static RestClient client(String baseUrl, BearerTokenRelay bearerTokenRelay, Duration readTimeout) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(CONNECT_TIMEOUT);

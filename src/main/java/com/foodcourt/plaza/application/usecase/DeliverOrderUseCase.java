@@ -11,8 +11,10 @@ import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.OrderStatusChange;
 import com.foodcourt.plaza.domain.model.Role;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
+import com.foodcourt.plaza.domain.spi.OrderTraceRecorder;
 import com.foodcourt.plaza.domain.spi.OwnerDirectory;
 import com.foodcourt.plaza.domain.spi.PinHasher;
 import com.foodcourt.plaza.domain.spi.RestaurantRepository;
@@ -33,16 +35,19 @@ public final class DeliverOrderUseCase implements DeliverOrder {
     private final RestaurantRepository restaurants;
     private final EmployeeAccountRule accounts;
     private final PinHasher hasher;
+    private final OrderTraceRule traces;
 
     public DeliverOrderUseCase(
             OrderRepository orders,
             RestaurantRepository restaurants,
             OwnerDirectory owners,
-            PinHasher hasher) {
+            PinHasher hasher,
+            OrderTraceRecorder traces) {
         this.orders = orders;
         this.restaurants = restaurants;
         this.accounts = new EmployeeAccountRule(owners);
         this.hasher = hasher;
+        this.traces = new OrderTraceRule(traces);
     }
 
     @Override
@@ -54,7 +59,20 @@ public final class DeliverOrderUseCase implements DeliverOrder {
         Order delivered = current.deliver(caller.id());
         requirePin(pin, current.pinHash());
         store(orderId, restaurantId, caller.id(), current.pinHash());
+        recordDelivery(current, caller.id());
         return delivered;
+    }
+
+    private void recordDelivery(Order current, long employeeId) {
+        traces.record(
+                new OrderStatusChange(
+                        current.id(),
+                        current.customerId(),
+                        current.restaurantId(),
+                        employeeId,
+                        OrderStatus.READY,
+                        OrderStatus.DELIVERED),
+                () -> orders.revertDelivered(current.id(), current.restaurantId(), employeeId, current.pinHash()));
     }
 
     private static void requireEmployee(Caller caller) {

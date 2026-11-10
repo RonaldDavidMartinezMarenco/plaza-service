@@ -9,8 +9,10 @@ import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.OrderStatusChange;
 import com.foodcourt.plaza.domain.model.Role;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
+import com.foodcourt.plaza.domain.spi.OrderTraceRecorder;
 import com.foodcourt.plaza.domain.spi.OwnerDirectory;
 
 /**
@@ -25,10 +27,12 @@ public final class CancelOrderUseCase implements CancelOrder {
 
     private final OrderRepository orders;
     private final CustomerAccountRule accounts;
+    private final OrderTraceRule traces;
 
-    public CancelOrderUseCase(OrderRepository orders, OwnerDirectory owners) {
+    public CancelOrderUseCase(OrderRepository orders, OwnerDirectory owners, OrderTraceRecorder traces) {
         this.orders = orders;
         this.accounts = new CustomerAccountRule(owners);
+        this.traces = new OrderTraceRule(traces);
     }
 
     @Override
@@ -37,7 +41,20 @@ public final class CancelOrderUseCase implements CancelOrder {
         accounts.requireCustomer(caller.id());
         Order cancelled = requireOwn(orderId, caller.id()).cancel();
         store(orderId, caller.id());
+        recordCancellation(cancelled);
         return cancelled;
+    }
+
+    private void recordCancellation(Order cancelled) {
+        traces.record(
+                new OrderStatusChange(
+                        cancelled.id(),
+                        cancelled.customerId(),
+                        cancelled.restaurantId(),
+                        null,
+                        OrderStatus.PENDING,
+                        OrderStatus.CANCELLED),
+                () -> orders.revertCancellation(cancelled.id(), cancelled.customerId()));
     }
 
     private static void requireCustomer(Caller caller) {

@@ -2,6 +2,7 @@ package com.foodcourt.plaza.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -30,16 +32,19 @@ import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
+import com.foodcourt.plaza.domain.exception.TraceabilityUnavailable;
 import com.foodcourt.plaza.domain.model.Account;
 import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.OrderStatusChange;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.domain.model.Role;
 import com.foodcourt.plaza.domain.spi.CustomerPhoneDirectory;
 import com.foodcourt.plaza.domain.spi.OrderReadyNotifier;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
+import com.foodcourt.plaza.domain.spi.OrderTraceRecorder;
 import com.foodcourt.plaza.domain.spi.OwnerDirectory;
 import com.foodcourt.plaza.domain.spi.PinGenerator;
 import com.foodcourt.plaza.domain.spi.PinHasher;
@@ -76,11 +81,14 @@ class MarkOrderReadyUseCaseTest {
     @Mock
     private OrderReadyNotifier notifier;
 
+    @Mock
+    private OrderTraceRecorder traces;
+
     private MarkOrderReadyUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new MarkOrderReadyUseCase(orders, restaurants, owners, customers, pins, hasher, notifier);
+        useCase = new MarkOrderReadyUseCase(orders, restaurants, owners, customers, pins, hasher, notifier, traces);
     }
 
     @Test
@@ -250,6 +258,7 @@ class MarkOrderReadyUseCaseTest {
 
         assertThatThrownBy(() -> useCase.markReady(PEDRO, 1L)).isInstanceOf(NotificationRejected.class);
         verify(orders).revertReady(1L, 1L, PEDRO.id(), HASH);
+        verify(traces, never()).record(any());
     }
 
     @Test
@@ -263,6 +272,40 @@ class MarkOrderReadyUseCaseTest {
         org.mockito.Mockito.doThrow(new NotificationUnavailable()).when(notifier).notifyReady(1L, "La Parrilla de Carlos", PHONE, PIN);
 
         assertThatThrownBy(() -> useCase.markReady(PEDRO, 1L)).isInstanceOf(NotificationUnavailable.class);
+        verify(orders).revertReady(1L, 1L, PEDRO.id(), HASH);
+        verify(traces, never()).record(any());
+    }
+
+    @Test
+    void markReadyRecordsTheChangeAfterTheSms() {
+        preparing(PEDRO);
+        when(customers.findPhone(9L)).thenReturn(PHONE);
+        when(pins.generate()).thenReturn(PIN);
+        when(hasher.hash(PIN)).thenReturn(HASH);
+        when(orders.markReadyIfInPreparation(1L, 1L, PEDRO.id(), HASH)).thenReturn(true);
+
+        useCase.markReady(PEDRO, 1L);
+
+        ArgumentCaptor<OrderStatusChange> recorded = ArgumentCaptor.forClass(OrderStatusChange.class);
+        verify(notifier).notifyReady(1L, "La Parrilla de Carlos", PHONE, PIN);
+        verify(traces).record(recorded.capture());
+        assertThat(recorded.getValue().previousStatus()).isEqualTo(OrderStatus.IN_PREPARATION);
+        assertThat(recorded.getValue().newStatus()).isEqualTo(OrderStatus.READY);
+        assertThat(recorded.getValue().employeeId()).isEqualTo(PEDRO.id());
+    }
+
+    @Test
+    void markReadyRevertsWhenTheTraceIsUnavailable() {
+        preparing(PEDRO);
+        when(customers.findPhone(9L)).thenReturn(PHONE);
+        when(pins.generate()).thenReturn(PIN);
+        when(hasher.hash(PIN)).thenReturn(HASH);
+        when(orders.markReadyIfInPreparation(1L, 1L, PEDRO.id(), HASH)).thenReturn(true);
+        when(orders.revertReady(1L, 1L, PEDRO.id(), HASH)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new TraceabilityUnavailable()).when(traces).record(any(OrderStatusChange.class));
+
+        assertThatThrownBy(() -> useCase.markReady(PEDRO, 1L)).isInstanceOf(TraceabilityUnavailable.class);
+        verify(notifier).notifyReady(1L, "La Parrilla de Carlos", PHONE, PIN);
         verify(orders).revertReady(1L, 1L, PEDRO.id(), HASH);
     }
 
