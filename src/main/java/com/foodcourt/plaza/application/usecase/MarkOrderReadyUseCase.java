@@ -14,12 +14,14 @@ import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.OrderStatusChange;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.domain.model.Role;
 import com.foodcourt.plaza.domain.model.SecurityPin;
 import com.foodcourt.plaza.domain.spi.CustomerPhoneDirectory;
 import com.foodcourt.plaza.domain.spi.OrderReadyNotifier;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
+import com.foodcourt.plaza.domain.spi.OrderTraceRecorder;
 import com.foodcourt.plaza.domain.spi.OwnerDirectory;
 import com.foodcourt.plaza.domain.spi.PinGenerator;
 import com.foodcourt.plaza.domain.spi.PinHasher;
@@ -44,6 +46,7 @@ public final class MarkOrderReadyUseCase implements MarkOrderReady {
     private final PinGenerator pins;
     private final PinHasher hasher;
     private final OrderReadyNotifier notifier;
+    private final OrderTraceRule traces;
 
     public MarkOrderReadyUseCase(
             OrderRepository orders,
@@ -52,7 +55,8 @@ public final class MarkOrderReadyUseCase implements MarkOrderReady {
             CustomerPhoneDirectory customers,
             PinGenerator pins,
             PinHasher hasher,
-            OrderReadyNotifier notifier) {
+            OrderReadyNotifier notifier,
+            OrderTraceRecorder traces) {
         this.orders = orders;
         this.restaurants = restaurants;
         this.accounts = new EmployeeAccountRule(owners);
@@ -60,6 +64,7 @@ public final class MarkOrderReadyUseCase implements MarkOrderReady {
         this.pins = pins;
         this.hasher = hasher;
         this.notifier = notifier;
+        this.traces = new OrderTraceRule(traces);
     }
 
     @Override
@@ -74,7 +79,20 @@ public final class MarkOrderReadyUseCase implements MarkOrderReady {
         String hash = hasher.hash(pin);
         store(orderId, restaurantId, caller.id(), hash);
         deliver(orderId, restaurantId, restaurant.name(), caller.id(), phone, pin, hash);
+        recordReady(current, caller.id(), hash);
         return ready.withPin(hash);
+    }
+
+    private void recordReady(Order current, long employeeId, String hash) {
+        traces.record(
+                new OrderStatusChange(
+                        current.id(),
+                        current.customerId(),
+                        current.restaurantId(),
+                        employeeId,
+                        OrderStatus.IN_PREPARATION,
+                        OrderStatus.READY),
+                () -> orders.revertReady(current.id(), current.restaurantId(), employeeId, hash));
     }
 
     private static void requireEmployee(Caller caller) {

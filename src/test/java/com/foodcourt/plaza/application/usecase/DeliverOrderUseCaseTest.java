@@ -2,6 +2,7 @@ package com.foodcourt.plaza.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -28,14 +30,17 @@ import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.PinDoesNotMatch;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
+import com.foodcourt.plaza.domain.exception.TraceabilityRejected;
 import com.foodcourt.plaza.domain.model.Account;
 import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.OrderStatusChange;
 import com.foodcourt.plaza.domain.model.Restaurant;
 import com.foodcourt.plaza.domain.model.Role;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
+import com.foodcourt.plaza.domain.spi.OrderTraceRecorder;
 import com.foodcourt.plaza.domain.spi.OwnerDirectory;
 import com.foodcourt.plaza.domain.spi.PinHasher;
 import com.foodcourt.plaza.domain.spi.RestaurantRepository;
@@ -61,11 +66,14 @@ class DeliverOrderUseCaseTest {
     @Mock
     private PinHasher hasher;
 
+    @Mock
+    private OrderTraceRecorder traces;
+
     private DeliverOrderUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new DeliverOrderUseCase(orders, restaurants, owners, hasher);
+        useCase = new DeliverOrderUseCase(orders, restaurants, owners, hasher, traces);
     }
 
     @Test
@@ -234,6 +242,34 @@ class DeliverOrderUseCaseTest {
         assertThatThrownBy(() -> useCase.deliver(PEDRO, 1L, PIN))
                 .isInstanceOf(OrderNotDeliverable.class)
                 .hasMessage("The order is READY and cannot be delivered");
+        verify(traces, never()).record(any());
+    }
+
+    @Test
+    void deliverRecordsTheChangeAndRestoresReadyWhenTheTraceIsRejected() {
+        ready(PEDRO);
+        when(hasher.matches(PIN, HASH)).thenReturn(true);
+        when(orders.deliverIfReady(1L, 1L, PEDRO.id(), HASH)).thenReturn(true);
+        when(orders.revertDelivered(1L, 1L, PEDRO.id(), HASH)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new TraceabilityRejected()).when(traces).record(any(OrderStatusChange.class));
+
+        assertThatThrownBy(() -> useCase.deliver(PEDRO, 1L, PIN)).isInstanceOf(TraceabilityRejected.class);
+        verify(orders).revertDelivered(1L, 1L, PEDRO.id(), HASH);
+    }
+
+    @Test
+    void deliverRecordsReadyToDeliveredForTheAssignedEmployee() {
+        ready(PEDRO);
+        when(hasher.matches(PIN, HASH)).thenReturn(true);
+        when(orders.deliverIfReady(1L, 1L, PEDRO.id(), HASH)).thenReturn(true);
+
+        useCase.deliver(PEDRO, 1L, PIN);
+
+        ArgumentCaptor<OrderStatusChange> recorded = ArgumentCaptor.forClass(OrderStatusChange.class);
+        verify(traces).record(recorded.capture());
+        assertThat(recorded.getValue().previousStatus()).isEqualTo(OrderStatus.READY);
+        assertThat(recorded.getValue().newStatus()).isEqualTo(OrderStatus.DELIVERED);
+        assertThat(recorded.getValue().employeeId()).isEqualTo(PEDRO.id());
     }
 
     private void ready(Caller caller) {

@@ -58,6 +58,8 @@ import com.foodcourt.plaza.domain.exception.OrderNotFound;
 import com.foodcourt.plaza.domain.exception.OrderNotReady;
 import com.foodcourt.plaza.domain.exception.PinDoesNotMatch;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
+import com.foodcourt.plaza.domain.exception.TraceabilityRejected;
+import com.foodcourt.plaza.domain.exception.TraceabilityUnavailable;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
 import com.foodcourt.plaza.domain.model.OrderListQuery;
@@ -120,6 +122,24 @@ class OrderControllerTest {
         org.mockito.ArgumentCaptor<PlaceOrderDraft> sent = org.mockito.ArgumentCaptor.forClass(PlaceOrderDraft.class);
         verify(handler).place(sent.capture());
         assertThatRestaurantAndLines(sent.getValue());
+    }
+
+    @Test
+    void placeReportsTraceabilityAsUnavailable() throws Exception {
+        when(handler.place(any(PlaceOrderDraft.class))).thenThrow(new TraceabilityUnavailable());
+
+        place(validBody())
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.detail").value("The traceability service is unavailable"));
+    }
+
+    @Test
+    void placeReportsARejectedTrace() throws Exception {
+        when(handler.place(any(PlaceOrderDraft.class))).thenThrow(new TraceabilityRejected());
+
+        place(validBody())
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("The status change was rejected"));
     }
 
     @ParameterizedTest

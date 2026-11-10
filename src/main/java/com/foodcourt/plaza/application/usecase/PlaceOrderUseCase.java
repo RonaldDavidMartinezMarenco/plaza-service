@@ -12,10 +12,13 @@ import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
 import com.foodcourt.plaza.domain.model.OrderLines;
+import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.OrderStatusChange;
 import com.foodcourt.plaza.domain.model.PlaceOrderDraft;
 import com.foodcourt.plaza.domain.model.Role;
 import com.foodcourt.plaza.domain.spi.DishRepository;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
+import com.foodcourt.plaza.domain.spi.OrderTraceRecorder;
 import com.foodcourt.plaza.domain.spi.OwnerDirectory;
 import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 
@@ -33,16 +36,19 @@ public final class PlaceOrderUseCase implements PlaceOrder {
     private final RestaurantRepository restaurants;
     private final CustomerAccountRule accounts;
     private final OrderMenuRule menu;
+    private final OrderTraceRule traces;
 
     public PlaceOrderUseCase(
             OrderRepository orders,
             RestaurantRepository restaurants,
             DishRepository dishes,
-            OwnerDirectory owners) {
+            OwnerDirectory owners,
+            OrderTraceRecorder traces) {
         this.orders = orders;
         this.restaurants = restaurants;
         this.accounts = new CustomerAccountRule(owners);
         this.menu = new OrderMenuRule(dishes);
+        this.traces = new OrderTraceRule(traces);
     }
 
     @Override
@@ -53,7 +59,21 @@ public final class PlaceOrderUseCase implements PlaceOrder {
         requireRestaurant(draft.restaurantId());
         menu.requireOrderable(draft.restaurantId(), lines);
         rejectOrderInProgress(caller.id());
-        return orders.save(Order.place(caller.id(), draft.restaurantId(), lines));
+        Order stored = orders.save(Order.place(caller.id(), draft.restaurantId(), lines));
+        recordOpening(stored);
+        return stored;
+    }
+
+    private void recordOpening(Order stored) {
+        traces.record(
+                new OrderStatusChange(
+                        stored.id(),
+                        stored.customerId(),
+                        stored.restaurantId(),
+                        null,
+                        null,
+                        OrderStatus.PENDING),
+                () -> orders.deleteIfPending(stored.id(), stored.customerId()));
     }
 
     private static void requireCustomer(Caller caller) {

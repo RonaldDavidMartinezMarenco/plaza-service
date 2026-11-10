@@ -46,7 +46,7 @@ public class CustomerOrderEntity {
     private String pinHash;
 
     @OrderBy("id ASC")
-    @OneToMany(mappedBy = "order", cascade = CascadeType.PERSIST)
+    @OneToMany(mappedBy = "order", cascade = {CascadeType.PERSIST, CascadeType.REMOVE}, orphanRemoval = true)
     private List<OrderLineEntity> lines = new ArrayList<>();
 
     protected CustomerOrderEntity() {

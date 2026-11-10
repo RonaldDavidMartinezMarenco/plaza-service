@@ -10,8 +10,10 @@ import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Caller;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderStatus;
+import com.foodcourt.plaza.domain.model.OrderStatusChange;
 import com.foodcourt.plaza.domain.model.Role;
 import com.foodcourt.plaza.domain.spi.OrderRepository;
+import com.foodcourt.plaza.domain.spi.OrderTraceRecorder;
 import com.foodcourt.plaza.domain.spi.OwnerDirectory;
 import com.foodcourt.plaza.domain.spi.RestaurantRepository;
 
@@ -29,14 +31,17 @@ public final class AssignOrderUseCase implements AssignOrder {
     private final OrderRepository orders;
     private final RestaurantRepository restaurants;
     private final EmployeeAccountRule accounts;
+    private final OrderTraceRule traces;
 
     public AssignOrderUseCase(
             OrderRepository orders,
             RestaurantRepository restaurants,
-            OwnerDirectory owners) {
+            OwnerDirectory owners,
+            OrderTraceRecorder traces) {
         this.orders = orders;
         this.restaurants = restaurants;
         this.accounts = new EmployeeAccountRule(owners);
+        this.traces = new OrderTraceRule(traces);
     }
 
     @Override
@@ -46,7 +51,20 @@ public final class AssignOrderUseCase implements AssignOrder {
         requireRestaurant(restaurantId);
         Order claimed = requireVisible(orderId, restaurantId).assign(caller.id());
         store(orderId, restaurantId, caller.id());
+        recordAssignment(claimed, caller.id());
         return claimed;
+    }
+
+    private void recordAssignment(Order claimed, long employeeId) {
+        traces.record(
+                new OrderStatusChange(
+                        claimed.id(),
+                        claimed.customerId(),
+                        claimed.restaurantId(),
+                        employeeId,
+                        OrderStatus.PENDING,
+                        OrderStatus.IN_PREPARATION),
+                () -> orders.releaseIfInPreparation(claimed.id(), claimed.restaurantId(), employeeId));
     }
 
     private static void requireEmployee(Caller caller) {

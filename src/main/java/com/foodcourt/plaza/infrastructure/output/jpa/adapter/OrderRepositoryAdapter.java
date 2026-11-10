@@ -147,6 +147,57 @@ public class OrderRepositoryAdapter implements OrderRepository {
         return updated == 1;
     }
 
+    @Override
+    @Transactional
+    public boolean deleteIfPending(long orderId, long customerId) {
+        Optional<CustomerOrderEntity> stored = orders.findByIdAndCustomerId(orderId, customerId);
+        if (missingPending(stored)) {
+            return false;
+        }
+        orders.delete(stored.get());
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public boolean releaseIfInPreparation(long orderId, long restaurantId, long employeeId) {
+        int updated = orders.releaseIfInPreparation(
+                orderId,
+                restaurantId,
+                employeeId,
+                OrderStatus.IN_PREPARATION,
+                OrderStatus.PENDING);
+        return updated == 1;
+    }
+
+    @Override
+    @Transactional
+    public boolean revertDelivered(long orderId, long restaurantId, long employeeId, String pinHash) {
+        int updated = orders.revertDelivered(
+                orderId,
+                restaurantId,
+                employeeId,
+                pinHash,
+                OrderStatus.DELIVERED,
+                OrderStatus.READY);
+        return updated == 1;
+    }
+
+    @Override
+    @Transactional
+    public boolean revertCancellation(long orderId, long customerId) {
+        int updated = orders.revertCancellation(
+                orderId,
+                customerId,
+                OrderStatus.CANCELLED,
+                OrderStatus.PENDING);
+        return updated == 1;
+    }
+
+    private static boolean missingPending(Optional<CustomerOrderEntity> stored) {
+        return stored.isEmpty() || stored.get().getStatus() != OrderStatus.PENDING;
+    }
+
     private static List<Long> ids(Page<CustomerOrderEntity> stored) {
         return stored.getContent().stream().map(CustomerOrderEntity::getId).toList();
     }
