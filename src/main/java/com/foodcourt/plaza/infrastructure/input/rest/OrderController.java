@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.foodcourt.plaza.application.handler.AssignOrderHandler;
 import com.foodcourt.plaza.application.handler.ListRestaurantOrdersHandler;
+import com.foodcourt.plaza.application.handler.MarkOrderReadyHandler;
 import com.foodcourt.plaza.application.handler.PlaceOrderHandler;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderStatus;
@@ -53,15 +54,57 @@ class OrderController {
     private final PlaceOrderHandler placeOrder;
     private final ListRestaurantOrdersHandler listOrders;
     private final AssignOrderHandler assignOrder;
+    private final MarkOrderReadyHandler markReady;
     private final OrderRestMapper mapper = new OrderRestMapper();
 
     OrderController(
             PlaceOrderHandler placeOrder,
             ListRestaurantOrdersHandler listOrders,
-            AssignOrderHandler assignOrder) {
+            AssignOrderHandler assignOrder,
+            MarkOrderReadyHandler markReady) {
         this.placeOrder = placeOrder;
         this.listOrders = listOrders;
         this.assignOrder = assignOrder;
+        this.markReady = markReady;
+    }
+
+    @PostMapping("/orders/{orderId}/ready")
+    @Operation(
+            summary = "Mark the order ready and send the PIN",
+            description = "The employee comes from the access token and must be the one assigned to the order. "
+                    + "The order must be IN_PREPARATION. It becomes READY. "
+                    + "The security PIN is sent by SMS and is not returned. pinHash is omitted. "
+                    + "A second call does not send another PIN.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Order ready", content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = OrderResponse.class),
+                    examples = @ExampleObject(name = "Ronald's order marked ready by Pedro", value = """
+                            {
+                              "id": 1,
+                              "customerId": 9,
+                              "restaurantId": 1,
+                              "status": "READY",
+                              "assignedEmployeeId": 5,
+                              "lines": [
+                                { "dishId": 1, "quantity": 1 },
+                                { "dishId": 4, "quantity": 2 }
+                              ]
+                            }
+                            """))),
+            @ApiResponse(responseCode = "400", description = "The order id is not a positive integer"),
+            @ApiResponse(responseCode = "401", description = "Missing or invalid access token"),
+            @ApiResponse(responseCode = "403", description = "The caller is not an employee of a restaurant"),
+            @ApiResponse(responseCode = "404", description = "The order, the employee, the customer, or the restaurant does not exist"),
+            @ApiResponse(responseCode = "409", description = "The order is not in preparation for this employee"),
+            @ApiResponse(responseCode = "502", description = "The SMS was rejected and the order stayed in preparation"),
+            @ApiResponse(responseCode = "503", description = "The user service or the messaging service is unavailable")
+    })
+    @PreAuthorize("hasRole('EMPLOYEE')")
+    public ResponseEntity<OrderResponse> ready(
+            @Parameter(description = "Ronald's order at La Parrilla after Pedro takes it", example = "1")
+            @PathVariable @Positive long orderId) {
+        return ResponseEntity.ok(mapper.toResponse(markReady.markReady(orderId)));
     }
 
     @PostMapping("/orders/{orderId}/assignment")
@@ -74,7 +117,7 @@ class OrderController {
             @ApiResponse(responseCode = "200", description = "Order assigned", content = @Content(
                     mediaType = "application/json",
                     schema = @Schema(implementation = OrderResponse.class),
-                    examples = @ExampleObject(name = "Camila's order taken by Pedro", value = """
+                    examples = @ExampleObject(name = "Ronald's order taken by Pedro", value = """
                             {
                               "id": 1,
                               "customerId": 9,
@@ -96,7 +139,7 @@ class OrderController {
     })
     @PreAuthorize("hasRole('EMPLOYEE')")
     public ResponseEntity<OrderResponse> assign(
-            @Parameter(description = "Camila's order at La Parrilla after the seed", example = "1")
+            @Parameter(description = "Ronald's order at La Parrilla after the seed", example = "1")
             @PathVariable @Positive long orderId) {
         return ResponseEntity.ok(mapper.toResponse(assignOrder.assign(orderId)));
     }

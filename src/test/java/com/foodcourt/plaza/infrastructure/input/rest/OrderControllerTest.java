@@ -31,6 +31,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import com.foodcourt.plaza.application.handler.AssignOrderHandler;
 import com.foodcourt.plaza.application.handler.ListRestaurantOrdersHandler;
+import com.foodcourt.plaza.application.handler.MarkOrderReadyHandler;
 import com.foodcourt.plaza.application.handler.PlaceOrderHandler;
 import com.foodcourt.plaza.domain.exception.ActiveOrderExists;
 import com.foodcourt.plaza.domain.exception.CustomerNotFound;
@@ -46,7 +47,10 @@ import com.foodcourt.plaza.domain.exception.OwnerDirectoryUnavailable;
 import com.foodcourt.plaza.domain.exception.InvalidOrderStatus;
 import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.NotificationRejected;
+import com.foodcourt.plaza.domain.exception.NotificationUnavailable;
 import com.foodcourt.plaza.domain.exception.OrderNotFound;
+import com.foodcourt.plaza.domain.exception.OrderNotReady;
 import com.foodcourt.plaza.domain.exception.RestaurantNotFound;
 import com.foodcourt.plaza.domain.model.Order;
 import com.foodcourt.plaza.domain.model.OrderLine;
@@ -75,6 +79,9 @@ class OrderControllerTest {
 
     @MockitoBean
     private AssignOrderHandler assignOrder;
+
+    @MockitoBean
+    private MarkOrderReadyHandler markReady;
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
@@ -498,6 +505,46 @@ class OrderControllerTest {
         assign("/orders/1/assignment")
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.title").value("User service unavailable"))
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
+    @Test
+    void readyReturnsTheOrderWithoutThePin() throws Exception {
+        when(markReady.markReady(1L)).thenReturn(new Order(
+                1L, 9L, 1L, OrderStatus.READY, 5L, "hash", List.of(new OrderLine(1L, 1), new OrderLine(4L, 2))));
+
+        assign("/orders/1/ready")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("READY"))
+                .andExpect(jsonPath("$.assignedEmployeeId").value(5))
+                .andExpect(jsonPath("$.pin").doesNotExist())
+                .andExpect(jsonPath("$.pinHash").doesNotExist());
+    }
+
+    @Test
+    void readyRejectsAnOrderThatCannotChange() throws Exception {
+        when(markReady.markReady(1L)).thenThrow(new OrderNotReady(OrderStatus.PENDING));
+
+        assign("/orders/1/ready")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("The order is PENDING and cannot be marked ready"));
+    }
+
+    @Test
+    void readyReportsARejectedMessage() throws Exception {
+        when(markReady.markReady(1L)).thenThrow(new NotificationRejected());
+
+        assign("/orders/1/ready")
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.detail").value("The order-ready message was rejected"));
+    }
+
+    @Test
+    void readyReportsAnUnavailableMessagingService() throws Exception {
+        when(markReady.markReady(1L)).thenThrow(new NotificationUnavailable());
+
+        assign("/orders/1/ready")
+                .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value(503));
     }
 

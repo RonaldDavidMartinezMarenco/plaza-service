@@ -10,7 +10,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import com.foodcourt.plaza.domain.exception.OrderAlreadyAssigned;
+import com.foodcourt.plaza.domain.exception.OrderAssignedToAnotherEmployee;
 import com.foodcourt.plaza.domain.exception.OrderNotAssignable;
+import com.foodcourt.plaza.domain.exception.OrderNotReady;
 
 class OrderTest {
 
@@ -78,5 +80,35 @@ class OrderTest {
                 .hasMessage("The order already has an assigned employee");
         assertThat(order.assignedEmployeeId()).isEqualTo(6L);
         assertThat(order.status()).isEqualTo(OrderStatus.PENDING);
+    }
+
+    @Test
+    void markReadyMovesPreparationToReadyWithoutAPin() {
+        Order order = new Order(1L, 9L, 1L, OrderStatus.IN_PREPARATION, 5L, null, List.of(new OrderLine(1L, 1)));
+
+        Order ready = order.markReady(5L).withPin("hash");
+
+        assertThat(ready.status()).isEqualTo(OrderStatus.READY);
+        assertThat(ready.assignedEmployeeId()).isEqualTo(5L);
+        assertThat(ready.pinHash()).isEqualTo("hash");
+        assertThat(order.pinHash()).isNull();
+        assertThat(order.status()).isEqualTo(OrderStatus.IN_PREPARATION);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = {"PENDING", "READY", "DELIVERED", "CANCELLED"})
+    void markReadyRejectsAnyStatusOtherThanPreparation(OrderStatus status) {
+        Order order = new Order(1L, 9L, 1L, status, 5L, null, List.of(new OrderLine(1L, 1)));
+
+        assertThatThrownBy(() -> order.markReady(5L))
+                .isInstanceOf(OrderNotReady.class)
+                .hasMessage("The order is " + status + " and cannot be marked ready");
+    }
+
+    @Test
+    void markReadyRejectsAnotherEmployee() {
+        Order order = new Order(1L, 9L, 1L, OrderStatus.IN_PREPARATION, 6L, null, List.of(new OrderLine(1L, 1)));
+
+        assertThatThrownBy(() -> order.markReady(5L)).isInstanceOf(OrderAssignedToAnotherEmployee.class);
     }
 }
