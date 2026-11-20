@@ -1,6 +1,7 @@
 package com.foodcourt.plaza.infrastructure.output.security;
 
 import java.security.SecureRandom;
+import java.util.Locale;
 
 import com.foodcourt.plaza.domain.model.SecurityPin;
 import com.foodcourt.plaza.domain.spi.PinGenerator;
@@ -13,6 +14,6 @@ public final class SecurePinGenerator implements PinGenerator {
     @Override
     public String generate() {
         int value = random.nextInt(1_000_000);
-        return String.format("%0" + SecurityPin.LENGTH + "d", value);
+        return String.format(Locale.ROOT, "%0" + SecurityPin.LENGTH + "d", value);
     }
 }

@@ -4,7 +4,7 @@ import com.foodcourt.plaza.domain.model.SecurityPin;
 import com.foodcourt.plaza.domain.spi.PinGenerator;
 
 /**
- * Returns one configured PIN. Used so a local seed can deliver an order.
+ * Returns one configured PIN for repeatable delivery tests.
  * The value is still sent by SMS and stored only as a bcrypt hash.
  */
 public final class FixedPinGenerator implements PinGenerator {
