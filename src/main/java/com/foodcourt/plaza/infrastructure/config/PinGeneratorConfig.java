@@ -8,12 +8,12 @@ import com.foodcourt.plaza.domain.spi.PinGenerator;
 import com.foodcourt.plaza.infrastructure.output.security.FixedPinGenerator;
 import com.foodcourt.plaza.infrastructure.output.security.SecurePinGenerator;
 
-/** One PIN generator. A blank {@code app.pin.fixed} keeps the random generator. */
+/** A blank PIN setting keeps the random generator. */
 @Configuration
 public class PinGeneratorConfig {
 
     @Bean
-    PinGenerator pinGenerator(@Value("${app.pin.fixed:}") String fixed) {
+    PinGenerator pinGenerator(@Value("${app.pin.fixed:${SEED_PIN:}}") String fixed) {
         return select(fixed);
     }
 
